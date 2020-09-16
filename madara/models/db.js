@@ -5,12 +5,13 @@ const options = {
   poolSize: 20,
   useNewUrlParser: true
 };
-mongoose.connect('mongodb://localhost:27017/etheraphy', options);
+mongoose.connect('mongodb+srv://Rahul:mCCgLapFDUVSGoQG@etherapy.ac12h.mongodb.net/eTherapy?w=majority', options);
 var db = mongoose.connection;
 
 // CONNECTION EVENTS
 db.on('connected', function() {
-  logger.info('Mongoose connected to mongodb://localhost:27017/etheraphy');
+  console.log('DB connected');
+  logger.info('mongodb+srv://Rahul:mCCgLapFDUVSGoQG@etherapy.ac12h.mongodb.net/eTherapy?w=majority');
 });
 db.on('error', function(err) {
   logger.error('Mongoose connection error: ' + err);
@@ -19,5 +20,7 @@ db.on('disconnected', function() {
   logger.info('Mongoose disconnected');
 });
 // BRING IN YOUR SCHEMAS & MODELS
-require('./login');
-require('./user');
+require('./loginModel');
+require('./userModel');
+
+// mongodb+srv://Rahul:Edward&$8126@etherapy.ac12h.mongodb.net/<dbname>?retryWrites=true&w=majority
