@@ -25,7 +25,7 @@ const userRoute = require('./madara/router/userRoute');
 
 const questionRoute = require('./madara/router/questionRoute');
 
-var port = 3003;   // Port used for user server
+var port = 4003;   // Port used for user server
 var app = express();
 
 
@@ -80,9 +80,9 @@ var connectionCount = 0;
 // });
 
 
-app.use('/',userRoute);
+app.use('/http://167.99.88.134:4003',userRoute);
 
-app.use('/', questionRoute);
+app.use('/http://167.99.88.134:4003', questionRoute);
 
 app.listen(port, () => {
 	logger.info(`User API running on localhost:${port}`);

@@ -411,7 +411,7 @@ module.exports.getUserById = (req, res) =>{
     })
   }
   catch(error){
-
+    res.send({error : error.message, message : 'DB error during fetch user', success : true});
   }
 }
 
@@ -471,6 +471,26 @@ module.exports.questionRegister = function(req, res){
   } 
   catch (error) {
     res.send({error : error.message,message : "Error while question registration", success : true}).status(500);
+  }
+}
+
+module.exports.getQuestionsById = (req, res) =>{
+  try{
+    Question.findById(req.params.id, (error, doc) =>{
+      if(error){
+        res.send({error : error.message, message : 'DB error during fetch questions', success : true});
+      }
+      if(!doc){
+        res.send({error : error, message : 'No Questions details found with this id', success : true});
+      }
+
+      else{
+        res.send({data : doc, message : 'Questions fetched by id', success : true});
+      }
+    })
+  }
+  catch(error){
+    res.send({error : error.message, message : 'DB error during fetch user', success : true});
   }
 }
 

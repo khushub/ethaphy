@@ -4,7 +4,7 @@
   "description": "Re-writing July.",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon user.js"
+    "start": "nodemon users.js"
   },
   "author": "",
   "license": "ISC",
