@@ -23,4 +23,3 @@ db.on('disconnected', function() {
 require('./loginModel');
 require('./userModel');
 
-// mongodb+srv://Rahul:Edward&$8126@etherapy.ac12h.mongodb.net/<dbname>?retryWrites=true&w=majority

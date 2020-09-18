@@ -5,9 +5,11 @@ router.post('/login', userHandler.login);
 
 router.post('/register', userHandler.createUser);
 
-router.get('/:id', userHandler.getUserById);
+router.get('/:token', userHandler.getUserById);
 
 router.put('/forgotPassword', userHandler.forgotPassword);
+
+router.put('/resetPassword/:token', userHandler.resetPassword);
 
 router.put('/userUpdate',userHandler.userUpdate);
 
