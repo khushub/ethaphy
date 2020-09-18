@@ -80,9 +80,10 @@ var connectionCount = 0;
 // });
 
 
-app.use('/http://167.99.88.134:4003',userRoute);
+app.use('http://167.99.88.134:4003/user',userRoute);
 
-app.use('/http://167.99.88.134:4003', questionRoute);
+app.use('http://167.99.88.134:4003/questions', questionRoute);
+// app.use('/questions', questionRoute);
 
 app.listen(port, () => {
 	logger.info(`User API running on localhost:${port}`);

@@ -3,7 +3,7 @@ const userHandler = require('../handlers/user');
 
 router.post('/login', userHandler.login);
 
-router.post('/', userHandler.createUser);
+router.post('/register', userHandler.createUser);
 
 router.get('/:id', userHandler.getUserById);
 

@@ -2,8 +2,8 @@ const router = require('express').Router();
 const userHandler = require('../handlers/user');
 
 
-router.post('/questions', userHandler.questionRegister);
+router.post('/', userHandler.questionRegister);
 
-router.get('/questions/:id', userHandler.getQuestionsById);
+router.get('/', userHandler.getQuestions);
 
 module.exports = router;

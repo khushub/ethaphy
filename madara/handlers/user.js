@@ -474,9 +474,10 @@ module.exports.questionRegister = function(req, res){
   }
 }
 
-module.exports.getQuestionsById = (req, res) =>{
+module.exports.getQuestions = (req, res) =>{
   try{
-    Question.findById(req.params.id, (error, doc) =>{
+    console.log("get questions by id");
+    Question.find({}, (error, doc) =>{
       if(error){
         res.send({error : error.message, message : 'DB error during fetch questions', success : true});
       }
@@ -490,7 +491,7 @@ module.exports.getQuestionsById = (req, res) =>{
     })
   }
   catch(error){
-    res.send({error : error.message, message : 'DB error during fetch user', success : true});
+    res.send({error : error.message, message : 'DB error during fetch Questions', success : true});
   }
 }
 
