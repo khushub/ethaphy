@@ -81,7 +81,7 @@ module.exports.createUser = function (req, res) {
         const user = new User({
           username: req.body.username,
           email: req.body.email,
-          mobileNo: req.body.mobileNo,
+          // mobileNo: req.body.mobileNo,
           password: Helper.hashPassword(req.body.password),
           role: req.body.role,
           status: req.body.status,
@@ -289,7 +289,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ storage: storage, fileFilter: fileFilter })
 
 
-module.exports.userUpdate = (req, res) => {
+module.exports.profilePictureUpload = (req, res) => {
   try {
     console.log("update me error aa gyi ");
     User.updateOne({ email: email }, { image: upload.single('image') }, { upsert: true });

@@ -7,7 +7,7 @@ const userSchema = new Schema({
 
    email : { type : String, required : true, unique : true,  index : true },        //email
 
-   mobileNo : {type : String, required : true},
+   mobileNo : {type : String},
 
    password : { type: String },     // admin/counserller/user/
 

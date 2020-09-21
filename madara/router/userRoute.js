@@ -11,6 +11,6 @@ router.put('/forgotPassword', userHandler.forgotPassword);
 
 router.put('/resetPassword/:token', userHandler.resetPassword);
 
-router.put('/userUpdate',userHandler.userUpdate);
+router.put('/imageUpload',userHandler.profilePictureUpload);
 
 module.exports = router;
