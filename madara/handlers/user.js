@@ -26,7 +26,7 @@ module.exports.login = function (req, res) {
         status: "fail",
         fail: {
           errorCode: 400,
-          message: "required field is missing"
+          message: "username or password missing"
         }
       });
     };
@@ -38,13 +38,13 @@ module.exports.login = function (req, res) {
         return;
       }
       if (!userDetails) {
-        return res.send({ error: error.message, message: "No data found", success: true });
+        return res.send({ error: error.message, success: false  ,message: "No user exist with this username"});
       }
 
       /* condition for compare password with users table data */
 
       if (!Helper.comparePassword(userDetails.password, password)) {
-        return res.send({ error: "Invalid Password" }).status(402);
+        return res.send({ error: "Invalid Password" , success : false}).status(402);
       };
 
       logger.info('login: ' + userDetails.username + ' logged in.');
@@ -53,7 +53,7 @@ module.exports.login = function (req, res) {
         userDetails,
         token
       }
-      return res.send({ data: data, message: "Sent succcessfully" }).status(200);
+      return res.send({ data: data,success : true, message: "User login success" }).status(200);
       // return token;
     })
   }
@@ -69,7 +69,7 @@ module.exports.createUser = function (req, res) {
     // check if all field is available
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
-      return res.send({ error: "All input field require" }).status(400);
+      return res.send({ error: "username or email or password is missing", success : false }).status(400);
     }
 
     // check if user exist
@@ -81,7 +81,7 @@ module.exports.createUser = function (req, res) {
         const user = new User({
           username: req.body.username,
           email: req.body.email,
-          // mobileNo: req.body.mobileNo,
+          mobileNo: req.body.mobileNo,
           password: Helper.hashPassword(req.body.password),
           role: req.body.role,
           status: req.body.status,
@@ -107,20 +107,15 @@ module.exports.createUser = function (req, res) {
           if (error) {
             res.send({ error: error.message, message: "DB error" }).status(500);
           }
-          let data = {
-            id: response._id,
-            username: response.username,
-            deleted: response.deleted,
-            status: response.status
-          }
-          res.send({ data: data, message: "User Created", success: true });
+          let data = response;
+          res.send({ data: data, success: true, message: "User Registered Successfully" });
         })
 
         // User.create(user);
         // return res.send({ data: user, message: "user created" });
       }
       else {
-        return res.send({ data: {}, message: "user already exist", success: true }).status(402);
+        return res.send({ data: {},success: false, message: "user already exist" }).status(402);
       }
     })
 
@@ -248,19 +243,19 @@ module.exports.getUserById = (req, res) => {
     let {userId} = jwt.decode(req.params.token);
     User.findById(userId, (error, doc) => {
       if (error) {
-        res.send({ error: error.message, message: 'DB error during fetch user', success: true });
+        res.send({ error: error.message,success : false, message: 'DB error during fetch user'});
       }
       if (!doc) {
-        res.send({ error: error, message: 'No user found with this id', success: true });
+        res.send({ error: error, success :  false, message: 'No user found with this id'});
       }
 
       else {
-        res.send({ data: doc, message: 'User fetched by id', success: true });
+        res.send({ data: doc, success: true ,message: 'User fetched for my profile section'});
       }
     })
   }
   catch (error) {
-    res.send({ error: error.message, message: 'DB error during fetch user', success: true });
+    res.send({ error: error.message,success: true , message: 'DB error during fetch user'});
   }
 }
 
@@ -308,20 +303,20 @@ module.exports.getQuestions = (req, res) => {
     console.log("get questions by id");
     Question.find({}, (error, doc) => {
       if (error) {
-        res.send({ error: error.message, message: 'DB error during fetch questions', success: true });
+        res.send({ error: error.message, success: false , message: 'DB error during fetch questions'});
       }
       if (doc.length > 0) {
-        res.send({ data: doc[0], message: 'Questions fetched', success: true });
+        res.send({ data: doc[0], success: true , message: 'Questions fetched'});
 
       }
 
       else {
-        res.send({ error: error, message: 'No Questions details found', success: true });
+        res.send({ error: error, success: false , message: 'No Questions details found'});
       }
     })
   }
   catch (error) {
-    res.send({ error: error.message, message: 'DB error during fetch Questions', success: true });
+    res.send({ error: error.message, success: false , message: 'DB error during fetch Questions'});
   }
 }
 
