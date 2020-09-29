@@ -44,11 +44,11 @@ logger.level = 'error';
 
 
 
-app.use('http://167.99.88.134:4003/user',userRoute);
-// app.use('/user', userRoute);
+// app.use('http://167.99.88.134:4003/user',userRoute);
+app.use('/user', userRoute);
 
-app.use('http://167.99.88.134:4003/data', questionRoute);
-// app.use('/question', questionRoute);
+// app.use('http://167.99.88.134:4003/data', questionRoute);
+app.use('/question', questionRoute);
 
 app.listen(port, () => {
 	logger.info(`User API running on localhost:${port}`);

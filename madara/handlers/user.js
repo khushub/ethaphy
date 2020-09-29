@@ -23,6 +23,7 @@ module.exports.login = function (req, res) {
 
     if (!username || !password) {
       return res.send({
+        data : {},
         status: "fail",
         fail: {
           errorCode: 400,
@@ -38,13 +39,13 @@ module.exports.login = function (req, res) {
         return;
       }
       if (!userDetails) {
-        return res.send({ error: error.message, success: false  ,message: "No user exist with this username"});
+        return res.send({ error: err, success: false  ,message: "No user exist with this username"}).status(401);
       }
 
       /* condition for compare password with users table data */
 
       if (!Helper.comparePassword(userDetails.password, password)) {
-        return res.send({ error: "Invalid Password" , success : false}).status(402);
+        return res.send({data : {}, error: "Invalid Password" , success : false}).status(403);
       };
 
       logger.info('login: ' + userDetails.username + ' logged in.');
@@ -69,11 +70,11 @@ module.exports.createUser = function (req, res) {
     // check if all field is available
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
-      return res.send({ error: "username or email or password is missing", success : false }).status(400);
+      return res.send({data : {}, error: "username or email or password is missing", success : false }).status(400);
     }
 
     // check if user exist
-    User.findOne({ email: req.body.email }, (err, user) => {
+    User.find({ email: req.body.email , username : req.body.username}, (err, user) => {
       if (err) {
         res.send({ error: err, message: "Db error" }).status(500);
       }
@@ -105,7 +106,7 @@ module.exports.createUser = function (req, res) {
         });
         user.save((error, response) => {
           if (error) {
-            res.send({ error: error.message, message: "DB error" }).status(500);
+            res.send({data : {}, error: error.message, message: "DB error" }).status(500);
           }
           let data = response;
           res.send({ data: data, success: true, message: "User Registered Successfully" });
@@ -115,7 +116,7 @@ module.exports.createUser = function (req, res) {
         // return res.send({ data: user, message: "user created" });
       }
       else {
-        return res.send({ data: {},success: false, message: "user already exist" }).status(402);
+        return res.send({ data: {},success: false, message: "username or email already taken" }).status(402);
       }
     })
 
@@ -143,7 +144,7 @@ module.exports.forgotPassword = (req, res) => {
           service: 'gmail',
           auth: {
             user: 'edwy23@gmail.com',
-            pass: 'Rahul%!8126'
+            pass: '************'
           }
         });
 
@@ -196,35 +197,35 @@ module.exports.resetPassword = (req, res) => {
   try {
     const { currentPassword, newPassword, confirmPassword } = req.body;
     if (newPassword !== confirmPassword) {
-      res.send({ error: 'mismatch confirm password with new password', success : true });
+      res.send({data : {}, error: 'mismatch confirm password with new password', success : false }).status(301);
     }
     else {
       let { userId } = jwt.decode(req.params.token);
       User.findById(userId, (error, user) => {
         if (error) {
-          res.send({ error: error.message, message: 'DB error in Reset Password' , success : true});
+          res.send({data : {}, error: error.message, success : false, message: 'DB error in Reset Password' });
         }
         if (!user) {
-          res.send({ error: error, message: 'No user found with such id', success: true });
+          res.send({data : {}, error: error, success : false, message: 'No user found with such id'}).status(302);
         }
         else {
           let { password } = user;
 
           if (!Helper.comparePassword(password, currentPassword)) {
-            return res.send({ error: "Incorrect current password", success : true }).status(402);
+            return res.send({data : {}, error: "Incorrect current password", success : false }).status(303);
           }
 
           else{
             user.password = Helper.hashPassword(newPassword);
             user.save((error,doc)=>{
               if(error){
-                res.send({error : error.message, message : 'Reset Password DB error', success : true});
+                res.send({data : {}, error : error.message, success : false, message : 'Reset Password DB error'});
               }
               if(!doc){
-                res.send({error : error.message, message : 'No user password updated', success : true});
+                res.send({data : {}, error : error.message,success : false, message : 'No user password updated'});
               }
               else{
-                res.send({data : doc, message : 'password reset successfully', success : true});
+                res.send({data : doc, success : true, message : 'password reset successfully'}).status(200);
               }
             })
           }
@@ -233,7 +234,7 @@ module.exports.resetPassword = (req, res) => {
     }
   }
   catch (error) {
-    res.send({error : error.message, message : 'Unknown error in reset password', success : true});
+    res.send({error : error.message,success : false, message : 'Unknown error in reset password'}).status(500);
   }
 }
 
@@ -243,10 +244,10 @@ module.exports.getUserById = (req, res) => {
     let {userId} = jwt.decode(req.params.token);
     User.findById(userId, (error, doc) => {
       if (error) {
-        res.send({ error: error.message,success : false, message: 'DB error during fetch user'});
+        res.send({data : {}, error: error.message,success : false, message: 'DB error during fetch user'});
       }
       if (!doc) {
-        res.send({ error: error, success :  false, message: 'No user found with this id'});
+        res.send({data : {}, error: error, success :  false, message: 'No user found with this id'});
       }
 
       else {
