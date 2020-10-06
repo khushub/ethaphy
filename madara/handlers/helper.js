@@ -26,6 +26,15 @@ const Helper = {
         myEnv.parsed.SECRET,{expiresIn : '7d'}
         );
         return token;
+    },
+
+    generateForgotPasswordToken(email){
+        const forgotPasswordToken = jwt.sign({
+            email : email
+        },
+        myEnv.parsed.FORGOT_PASSWORD_SECRET
+        );
+        return forgotPasswordToken;
     }
 }
 module.exports = Helper;

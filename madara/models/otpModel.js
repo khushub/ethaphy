@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-// const User  = require('./userModel');
 
 const Schema = mongoose.Schema;
 
@@ -9,7 +8,7 @@ const otpSchema = new Schema({
     },
 
     email : {
-        type : {type : Schema.Types.ObjectId  , ref : 'User'}
+        type : {type : String}
     }
 });
 

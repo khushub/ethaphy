@@ -64,8 +64,7 @@ module.exports.login = function (req, res) {
 };
 
 
-
-module.exports.createUser = function (req, res) {
+module.exports.createUser = async function (req, res) {
   try {
     // check if all field is available
     const { username, email, password } = req.body;
@@ -74,114 +73,94 @@ module.exports.createUser = function (req, res) {
     }
 
     // check if user exist
-    User.find({ email: req.body.email , username : req.body.username}, (err, user) => {
-      if (err) {
-        res.send({ error: err, message: "Db error" }).status(500);
-      }
-      if (!user) {
-        const user = new User({
-          username: req.body.username,
-          email: req.body.email,
-          mobileNo: req.body.mobileNo,
-          password: Helper.hashPassword(req.body.password),
-          role: req.body.role,
-          status: req.body.status,
-          feeling: req.body.feeling,
-          challenge: req.body.challenge,
-          arealife: req.body.arealife,
-          description: req.body.description,
-          sucideattempt: req.body.sucideattempt,
-          counsellingattempt: req.body.counsellingattempt,
-          age: req.body.age,
-          country: req.body.country,
-          state: req.body.state,
-          relationshipstatus: req.body.relationshipstatus,
-          genderidentity: req.body.genderidentity,
-          sexualorientation: req.body.sexualorientation,
-          religousspitual: req.body.religousspitual,
-          painorillness: req.body.painorillness,
-          medicinestatus: req.body.medicinestatus,
-          ready: req.body.ready,
-          deleted: req.body.deleted,
-        });
-        user.save((error, response) => {
-          if (error) {
-            res.send({data : {}, error: error.message, message: "DB error" }).status(500);
-          }
-          let data = response;
-          res.send({ data: data, success: true, message: "User Registered Successfully" });
-        })
-
-        // User.create(user);
-        // return res.send({ data: user, message: "user created" });
-      }
-      else {
-        return res.send({ data: {},success: false, message: "username or email already taken" }).status(402);
-      }
+   await User.findOne({$and : [{email: req.body.email, username : req.body.username}]})
+    .then(user =>{
+        if (!user) {
+          const user = new User({
+            username: req.body.username,
+            email: req.body.email,
+            mobileNo: req.body.mobileNo,
+            password: Helper.hashPassword(req.body.password),
+            role: req.body.role,
+            status: req.body.status,
+            feeling: req.body.feeling,
+            challenge: req.body.challenge,
+            arealife: req.body.arealife,
+            description: req.body.description,
+            sucideattempt: req.body.sucideattempt,
+            counsellingattempt: req.body.counsellingattempt,
+            age: req.body.age,
+            country: req.body.country,
+            state: req.body.state,
+            relationshipstatus: req.body.relationshipstatus,
+            genderidentity: req.body.genderidentity,
+            sexualorientation: req.body.sexualorientation,
+            religousspitual: req.body.religousspitual,
+            painorillness: req.body.painorillness,
+            medicinestatus: req.body.medicinestatus,
+            ready: req.body.ready,
+            deleted: req.body.deleted,
+            forgotPasswordToken : Helper.generateForgotPasswordToken(req.body.email)
+          });
+          user.save((error, response) => {
+            if (error) {
+              res.send({data : {}, error: error.message, message: "username or email already taken" }).status(500);
+            }
+            else{
+              let data = response;
+              res.send({ data: data, success: true, message: "User Registered Successfully" });
+            }
+          })
+        }
+        else {
+          return res.send({ data: {},success: false, message: "username or email already taken" }).status(402);
+        }
     })
-
+    .catch(error =>{
+      res.send({ error: error, message: "Db error" }).status(500);
+    })
   }
   catch (error) {
     res.send({ error: error.message, message: "Error while registration" }).status(500);
   }
 }
 
+let otp;
 
 module.exports.forgotPassword = (req, res) => {
   try {
     const email = req.body.email;
     User.findOne({ email: email }, (error, doc) => {
       if (error) {
-        res.send({ error: error.message, message: 'DB error during fetch user', success: true });
+        res.send({ error: error, success: false, message: 'DB error during fetch user' });
       }
       if (!doc) {
-        res.send({ error: error.message, message: 'No user found with this email address', success: true })
+        res.send({ error: error, success: false, message: 'No user found with this email address' })
       }
       else {
-        console.log("error in else");
-        const otp = Math.floor(Math.random() * 100000);
+        // console.log("error in else");
+        otp = Math.floor(Math.random() * 100000);
         let mailTransport = nodemailer.createTransport({
           service: 'gmail',
           auth: {
             user: 'edwy23@gmail.com',
-            pass: '************'
+            pass: 'Rahul%!8126'
           }
         });
 
         let mailDetails = {
           from: 'edwy23@gmail.com',
-          to: 'rahul.168607@knit.ac.in',
+          to: email,
           subject: 'Test mail',
           text: otp.toString()
         }
 
-        mailTransport.sendMail(mailDetails, (error, res)=>{
-          if(error) console.log("error in sending mail: ",error);
+        mailTransport.sendMail(mailDetails, (error, response)=>{
+          if(error){
+            res.send({error : error, success : false, message: "Error in otp send" });
+          }
           else{
-            console.log('mail send successfully', res);
-          }
-        })
-        console.log("otp", OTP);
-        OTP.findOne({ email: email }, (error, result) => {
-          if (error) {
-            console.log(error.message);
-          }
-          if (!result) {
-            let doc = new OTP({
-              otp: otp,
-              email: email
-            });
-            doc.save();
-          }
-          else {
-            OTP.updateOne({ email: email }, { otp: otp }, (error, response) => {
-              if (error) {
-                console.log(error);
-              }
-              else {
-                console.log("updated document: ", response);
-              }
-            })
+            res.send({response : response, success : true, message : "OTP sent to your mail"});
           }
         })
       }
@@ -189,6 +168,18 @@ module.exports.forgotPassword = (req, res) => {
   }
   catch (error) {
     res.send({ error: error.message, message: 'Error at forgot password', success: true });
+  }
+}
+
+
+// OTP Verification
+
+module.exports.verifyOTP = (req, res) =>{
+  if(otp === req.body.otp){
+    res.send({success : true, message : "OTP verifification success"});
+  }
+  else{
+    res.send({success : false, message : "OTP verifification fail"});
   }
 }
 
@@ -256,7 +247,7 @@ module.exports.getUserById = (req, res) => {
     })
   }
   catch (error) {
-    res.send({ error: error.message,success: true , message: 'DB error during fetch user'});
+    res.send({ error: error.message,success: false , message: 'DB error while making request for fetch user'});
   }
 }
 

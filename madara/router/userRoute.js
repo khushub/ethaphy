@@ -7,7 +7,9 @@ router.post('/register', userHandler.createUser);
 
 router.get('/:token', userHandler.getUserById);
 
-router.put('/forgotPassword', userHandler.forgotPassword);
+router.post('/forgotPassword', userHandler.forgotPassword);
+
+router.post('/verifyOTP', userHandler.verifyOTP);
 
 router.put('/resetPassword/:token', userHandler.resetPassword);
 
