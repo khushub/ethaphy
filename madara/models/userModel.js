@@ -17,6 +17,8 @@ const userSchema = new Schema({
 
    feeling : {type : String},
 
+   profilePhoto : {type : String},
+
    challenge : {type : Array},
 
    arealife : { type : Array},

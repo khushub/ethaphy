@@ -38,7 +38,7 @@ const counselorSchema = new Schema({
 
     languages : {type : Array, required: true},
 
-    photo : {data : Buffer, contentType : String},
+    photo : {type : String, required : true},
 
     designations : {type : Array, required : true},
 
@@ -59,7 +59,7 @@ const counselorSchema = new Schema({
 }, {timestamps : true});
 
 counselorSchema.methods.setDefaults = function (){
-    this.role = 'admin';
+    this.role = 'counselor';
     this.status  =  'inactive';
 }
 

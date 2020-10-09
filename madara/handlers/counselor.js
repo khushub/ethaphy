@@ -1,13 +1,16 @@
 const Counselor = require('../models/counselorModel');
 const Helper = require('../handlers/helper');
+var logger = require('log4js').getLogger();
 const multer = require('multer');
-const fs = require('fs');
-const path = require('path');
+const jwt = require('jsonwebtoken');
+
+
+
 
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '/uploads/'));
+    cb(null,'./uploads/');
   },
 
   filename: (req, file, cb) => {
@@ -27,8 +30,7 @@ const fileFilter = (req, file, cb) => {
   }
 }
 
-const upload = multer({ storage: storage, fileFilter: fileFilter }).single('photo');
-
+const upload = multer({ storage : storage, fileFilter :fileFilter }).single('photo');
 
 
 // Counselor Registeration
@@ -71,10 +73,7 @@ module.exports.createCounselor = async function (req, res) {
                 genderApplies: req.body.genderApplies,
                 languages: req.body.languages,
 
-                photo : {
-                  data : fs.readFileSync(path.join(__dirname + '/uploads/' + req.file.filename)),
-                  contentType: 'image/png'
-                },
+                photo : req.file.path,
 
                 designations: req.body.designations,
                 specialities: req.body.specialities,
@@ -138,7 +137,7 @@ module.exports.createCounselor = async function (req, res) {
           return;
         }
         if (!details) {
-          return res.send({ error: err, success: false  ,message: "No counselor exist with this username"}).status(401);
+          return res.send({ error: err, success: false  ,message: "No counselor exist with this email"}).status(401);
         }
   
         /* condition for compare password with counselor table data */
@@ -160,3 +159,24 @@ module.exports.createCounselor = async function (req, res) {
       res.send({ error: error.message }).status(500);
     }
   };
+
+
+  module.exports.getCounselor = (req, res) =>{
+    try {
+      let {userId} = jwt.decode(req.params.token);
+      Counselor.findById(userId, (error, doc) =>{
+        if(error){
+          res.send({data : {}, success : false, message : error.message});
+        }
+        if(!doc){
+          res.send({data : {}, success : false, message : "No counselor exist. somthing wrong with token"});
+        }
+        else{
+          res.send({data : doc, success : true, message : "Counselor fetched successfully"});
+        }
+      })
+    } 
+    catch (error) {
+      res.send({data : {}, success : false,error, message : "Something wrong with request"});
+    }
+  }

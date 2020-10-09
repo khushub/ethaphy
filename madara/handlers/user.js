@@ -11,7 +11,6 @@ const User = require('../models/userModel');
 const Question = require('../models/questionModel');
 const OTP = require('../models/otpModel');
 const nodemailer = require('nodemailer');
-const { response } = require('express');
 
 
 module.exports.login = function (req, res) {
@@ -253,10 +252,10 @@ module.exports.getUserById = (req, res) => {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, './uploads');
+    cb(null,'./uploads/');
   },
 
-  filename: function (req, file, cb) {
+  filename: (req, file, cb) => {
     let originalname = file.originalname;
     let extension = originalname.split(".");
     filename = Date.now() + "." + extension[extension.length - 1];
@@ -266,26 +265,41 @@ const storage = multer.diskStorage({
 
 
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype == 'image/jpeg' || file.mimetype == 'image/png') {
+  if (file.mimetype == 'image/jpeg' || file.mimetype == 'image/png'|| file.mimetype == 'image/jpg') {
     cb(null, true);
   } else {
     cb(null, false);
   }
 }
 
-const upload = multer({ storage: storage, fileFilter: fileFilter })
+const upload = multer({ storage : storage, fileFilter :fileFilter }).single('image');
 
 
 module.exports.profilePictureUpload = (req, res) => {
-  try {
-    console.log("update me error aa gyi ");
-    User.updateOne({ email: email }, { image: upload.single('image') }, { upsert: true });
-    // upload.single('image');
-    res.send({ message: "File uploaded success", success: true }).status(201);
-  }
-  catch (error) {
-    res.send({ message: "file upload error", success: true }).status(203);
-  }
+  upload(req, res,(error) =>{
+    if(error){
+      res.send({data : {}, success : false, error, message : "file upload error" });
+    }
+    else{
+      try {
+        let {userId} = jwt.decode(req.params.token);
+        
+        User.updateOne({_id : userId},
+          {$set : {profilePhoto : req.file.path}},{upsert : true})
+          .then((result, error) =>{
+            if(error){
+              res.send({data : {}, error, success : false, message : "error in file upload"});
+            }
+            res.send({data : result, message: "value updated", success: true }).status(201);
+          })
+          .catch(error => res.send({error, message: "update error", success: false }).status(201));
+      }
+
+      catch (error) {
+        res.send({ data : {}, success : false, error, message : " invalid request" }).status(203);
+      }
+    }
+  });
 }
 
 
