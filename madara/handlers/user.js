@@ -143,7 +143,7 @@ module.exports.forgotPassword = (req, res) => {
           service: 'gmail',
           auth: {
             user: 'edwy23@gmail.com',
-            pass: 'Rahul%!8126'
+            pass: '***********'
           }
         });
 
