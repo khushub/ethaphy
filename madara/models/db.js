@@ -6,7 +6,8 @@ const myEnv = require('dotenv').config();
 const DB_URL = myEnv.parsed.DB_URL;
 const options = {
   poolSize: 20,
-  useNewUrlParser: true
+  useNewUrlParser: true,
+  useUnifiedTopology: true
 };
 mongoose.connect(DB_URL, options);
 var db = mongoose.connection;

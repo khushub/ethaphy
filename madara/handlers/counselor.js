@@ -3,6 +3,7 @@ const Helper = require('../handlers/helper');
 var logger = require('log4js').getLogger();
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 
 
 
@@ -84,13 +85,36 @@ module.exports.createCounselor = async function (req, res) {
                 graduatedYear: req.body.graduatedYear,
                 howYouhearAboutUs: req.body.howYouhearAboutUs,
               });
+
+              let mailTransport = nodemailer.createTransport({
+                service : 'gmail',
+                auth :{
+                  user : 'edwy23@gmail.com',
+                  pass : 'Rahul%!8126'
+                }
+              });
+
+              let mailDetails = {
+                from : 'edwy23@gmail.com',
+                to : req.body.email,
+                subject : 'Registration Success mail',
+                text : ' You successfully registered to Etherapthy Pro'
+              }
+
               counselor.save((error, response) => {
                 if (error) {
                   res.send({ data: {}, error: error.message, message: "username or email already taken" }).status(500);
                 }
                 else {
                   let data = response;
-                  res.send({ data: data, success: true, message: "Counselor Registered Successfully" });
+                  mailTransport.sendMail(mailDetails, (error, response) =>{
+                    if(error){
+                      res.send({data : {}, success : false, error, message :'Error in mail send in user registration'});
+                    }
+                    else{
+                      res.send({data: data, success: true, message: "Counselor Registered and mail send to registered email"});
+                    }
+                  });
                 }
               })
             }
@@ -99,7 +123,7 @@ module.exports.createCounselor = async function (req, res) {
             }
           })
           .catch(error => {
-            res.send({ error: error, message: "Db error" }).status(500);
+            res.send({ error: error, message: "required field/s missing" }).status(500);
           })
       }
       catch (error) {

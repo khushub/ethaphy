@@ -325,4 +325,3 @@ module.exports.getQuestions = (req, res) => {
     res.send({ error: error.message, success: false , message: 'DB error during fetch Questions'});
   }
 }
-

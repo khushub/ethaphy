@@ -11,9 +11,9 @@ const userSchema = new Schema({
 
    password : { type: String },     // admin/counserller/user/
 
-   role : { type : String},         // admin/counserller/user/
+   role : { type : String, default : 'user'},         // admin/counserller/user/
 
-   status : {type : String},        // active/inactive
+   status : {type : String, default : 'inactive'},        // active/inactive
 
    feeling : {type : String},
 
@@ -57,7 +57,7 @@ const userSchema = new Schema({
 
 userSchema.methods.setDefaults = function(){
 	this.role = 'user';
-	this.status = 'active';
+	this.status = 'inactive';
 };
 
 userSchema.index({role:1,deleted: -1});

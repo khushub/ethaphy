@@ -1,5 +1,23 @@
 const router = require('express').Router();
 const counselorHandler = require('../handlers/counselor');
+
+
+
+router.post('/login', counselorHandler.login);
+
+router.post('/register',counselorHandler.createCounselor);
+
+router.get('/:token', counselorHandler.getCounselor);
+
+module.exports = router;
+
+
+
+
+
+
+
+
 // const multer = require('multer');
 
 
@@ -26,12 +44,3 @@ const counselorHandler = require('../handlers/counselor');
 //   }
   
 //   const upload = multer({ storage : storage, fileFilter :fileFilter });
-
-
-router.post('/login', counselorHandler.login);
-
-router.post('/register',counselorHandler.createCounselor);
-
-router.get('/:token', counselorHandler.getCounselor);
-
-module.exports = router;
