@@ -27,7 +27,11 @@ const questionRoute = require('./madara/router/questionRoute');
 
 const counselorRoute = require('./madara/router/counselorRoute');
 
-const paymentRoute = require('./madara/router/paymentRoute');
+const addCardRoute = require('./madara/router/addCardRoute');
+
+const stripePlanRoute = require('./madara/router/stripePlanRoute');
+
+const subscribePlanRoute = require('./madara/router/subscriberRoute');
 
 var port = 4003;   // Port used for user server
 var app = express();
@@ -57,8 +61,11 @@ app.use('/data', questionRoute);
 
 app.use('/counselor', counselorRoute);
 
-app.use('/addCard', paymentRoute);
+app.use('/addCard', addCardRoute);
 
+app.use('/stripe', stripePlanRoute);
+
+app.use('/subscribePlan', subscribePlanRoute);
 
 app.listen(port, () => {
 	logger.info(`User API running on localhost:${port}`);

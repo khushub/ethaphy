@@ -4,13 +4,22 @@ var logger = require('log4js').getLogger();
 const Helper = require('./helper');
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 
 // required models
 const Login = require('../models/loginModel');
 const User = require('../models/userModel');
 const Question = require('../models/questionModel');
 const OTP = require('../models/otpModel');
-const nodemailer = require('nodemailer');
+
+
+// required Stripe modules 
+
+const myEnv = require('dotenv').config();
+const secretKey = myEnv.parsed.STRIPE_KEY;
+
+const Stripe = require('stripe');
+const stripe = Stripe(secretKey);
 
 
 module.exports.login = function (req, res) {
@@ -325,3 +334,20 @@ module.exports.getQuestions = (req, res) => {
     res.send({ error: error.message, success: false , message: 'DB error during fetch Questions'});
   }
 }
+
+
+// View all subscription plan
+
+module.exports.viewAllPlan = async (req, res)=>{
+  const products = await stripe.products.list({
+      limit: 2,
+    })
+    .then(products =>{
+      res.send({data : products})  
+    })
+    .catch(error =>{
+        res.send({error : error, message : "plan fetch error"});
+    });
+}
+
+

@@ -5,7 +5,8 @@ const paymentSchema = new mongoose.Schema({
     stripeUserId : {type : String},
     email : {type :  String},
     cardDetails : {type : Object},
-    paymentToken : {type : String}
+    paymentToken : {type : String},
+    amount : {type :Number}
 });
 
 module.exports = mongoose.model('Payment', paymentSchema);
