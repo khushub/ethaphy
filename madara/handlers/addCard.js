@@ -1,10 +1,16 @@
+// Setup Stripe environment
+
 const myEnv = require('dotenv').config();
 const secretKey = myEnv.parsed.STRIPE_KEY;
 
 const Stripe = require('stripe');
 const stripe = Stripe(secretKey);
 
+// Required Model
+
 const PaymentModel = require('../models/paymentModel');
+
+const User = require('../models/userModel');
 
 
 
@@ -50,11 +56,29 @@ module.exports.addCard = (req, res) => {
                                     console.log("stripetoken", stripeToken);
                                     stripe.customers.createSource(customer.id, { source: stripeToken })
                                         .then(card => {
-                                            const balance = stripe.balance.retrieve({
-                                                stripeAccount: customer.id
-                                            });
-                                            console.log("balance of card", balance);
                                             console.log("card added", card);
+
+                                            User.updateOne({email:req.body.email}, 
+                                                {$set : {status : 'active'}})
+                                                .then(result =>{
+                                                    console.log("card added and status updated");
+                                                })
+                                                .catch(error =>{
+                                                    console.log(error , "status update error when card added");
+                                                })
+
+                                            const customerDetails = new PaymentModel({
+                                                stripeCustomerId : customer.id,
+                                                email : req.body.email,
+                                                cardDetails : cardDetails
+                                            });
+                                            customerDetails.save()
+                                            .then(result =>{
+                                                console.log("customer details added in payment model");
+                                            })
+                                            .catch(error =>{
+                                                console.log(error, "erro in saving customer details in payment model");
+                                            });
 
                                             const subscription =  stripe.subscriptions.create({
                                                 customer: customer.id,
@@ -73,6 +97,7 @@ module.exports.addCard = (req, res) => {
                                               })
                                             
                                             console.log("subscription", subscription);
+                                            res.send({data : subscription, success :true, message : "card added with status updated, and 3 days trial started"});
 
                                         })
                                         .catch(error => {
@@ -87,7 +112,7 @@ module.exports.addCard = (req, res) => {
                            
                         }
                     }
-                })
+                });
             }
         }
     })

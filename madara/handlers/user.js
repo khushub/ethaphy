@@ -10,6 +10,7 @@ const nodemailer = require('nodemailer');
 const Login = require('../models/loginModel');
 const User = require('../models/userModel');
 const Question = require('../models/questionModel');
+const Payment = require('../models/paymentModel');
 const OTP = require('../models/otpModel');
 
 
@@ -351,3 +352,15 @@ module.exports.viewAllPlan = async (req, res)=>{
 }
 
 
+module.exports.subscribePlan = async (req, res) => {
+  const products = await stripe.products.list({
+    limit: 2,
+  })
+    .then(products => {
+      Payment.findOne({email : req.body.email});
+      res.send({ data: products })
+    })
+    .catch(error => {
+      res.send({ error: error, message: "plan fetch error" });
+    });
+}

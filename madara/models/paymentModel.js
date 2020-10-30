@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
 
-const paymentSchema = new mongoose.Schema({
-    paymentId : { type : String},
-    stripeUserId : {type : String},
+const Schema = mongoose.Schema;
+
+const paymentSchema = new Schema({
+    stripeCustomerId : {type : String},
     email : {type :  String},
     cardDetails : {type : Object},
-    paymentToken : {type : String},
     amount : {type :Number}
 });
 
