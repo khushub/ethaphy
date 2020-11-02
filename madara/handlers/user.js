@@ -5,6 +5,7 @@ const Helper = require('./helper');
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const {response} = require('express');
 
 // required models
 const Login = require('../models/loginModel');
@@ -344,7 +345,7 @@ module.exports.viewAllPlan = async (req, res)=>{
       limit: 2,
     })
     .then(products =>{
-      res.send({data : products})  
+      res.send({data : products, success : true})  
     })
     .catch(error =>{
         res.send({error : error, message : "plan fetch error"});
@@ -363,4 +364,43 @@ module.exports.subscribePlan = async (req, res) => {
     .catch(error => {
       res.send({ error: error, message: "plan fetch error" });
     });
+}
+
+
+
+module.exports.cancelTrial = (req, res) => {
+  Payment.findOne({ stripeCustomerId: req.params.stripeCustomerId })
+    .then(result => {
+      console.log(result);
+      stripe.subscriptions.update(result.subscriptionId, {
+        trial_end: 'now',
+      })
+        .then(response => {
+          console.log("response", response);
+
+          let payDetails = {
+            amount: 160,
+            currency: 'usd',
+            description: 'user trail charge',
+            customer: req.params.stripeCustomerId
+          };
+
+          stripe.charges.create(payDetails)
+            .then(charge => {
+              console.log("user charged with amount details: ", charge);
+              res.send({ data: charge, success: true, message: "trail cancel and payment done for trial"});
+            })
+            .catch(error => {
+              console.log("error in user charge ", error);
+              res.send({ error: error, success: false, message: "pay charge error" });
+            });
+        })
+        .catch(error => {
+          console.log(error, "error");
+          res.send({ error: error, success: false, message: "trial cancelation error" });
+        });
+    })
+    .catch(error => {
+      res.send({ error: error, success: false, message: "trial cancelation error" });
+    })
 }

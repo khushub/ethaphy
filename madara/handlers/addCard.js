@@ -15,16 +15,16 @@ const User = require('../models/userModel');
 
 
 
-module.exports.addCard = (req, res) => {
-    PaymentModel.findOne({ email: req.body.email }, (error, result) => {
+module.exports.addCard = async (req, res) => {
+    await PaymentModel.findOne({ email: req.body.email }, (error, result) => {
         if (error) {
             console.log("error in adding card for checking if user already exist");
-            res.send({error : error, success : false, message : "add card user already exist for trial error"});
+            res.send({ error: error, success: false, message: "add card user already exist for trial error" });
         }
         else {
             if (result) {
                 console.log("trial already done for this user");
-                res.send({data :{}, success : false, message : "trial already completed for this user"});
+                res.send({ data: {}, success: false, message: "trial already completed for this user" });
             }
             else {
                 console.log("in make payment");
@@ -32,12 +32,12 @@ module.exports.addCard = (req, res) => {
                 const customer = {
                     name: req.body.name,
                     email: req.body.email,
-                    address : req.body.address
+                    address: req.body.address
                 }
                 stripe.customers.create(customer, (error, customer) => {
                     if (error) {
                         console.log("error in customer create in stripe", error);
-                        res.send({error: error, success: false, message : "customer create error in stripe"});
+                        res.send({ error: error.raw.message, success: false, message: "customer create error in stripe" });
                     }
                     else {
                         if (customer) {
@@ -58,58 +58,64 @@ module.exports.addCard = (req, res) => {
                                         .then(card => {
                                             console.log("card added", card);
 
-                                            User.updateOne({email:req.body.email}, 
-                                                {$set : {status : 'active'}})
-                                                .then(result =>{
-                                                    console.log("card added and status updated");
+                                            User.updateOne({ email: req.body.email },
+                                                { $set: { status: 'active' } })
+                                                .then(result => {
+                                                    console.log("card added and status updated", result);
                                                 })
-                                                .catch(error =>{
-                                                    console.log(error , "status update error when card added");
+                                                .catch(error => {
+                                                    console.log(error, "status update error when card added");
+                                                });
+
+                                            const subscription = new Promise((resolve, reject) => {
+                                                const subData = stripe.subscriptions.create({
+                                                    customer: customer.id,
+                                                    items: [
+                                                        {
+                                                            plan: 'plan_IHlzrqE23U4iVi',
+                                                        },
+                                                    ],
+                                                    trial_period_days: 3
+                                                });
+                                                if (subData) {
+                                                    resolve(subData);
+                                                }
+                                                else {
+                                                    reject(new Error("trial subsciption error"));
+                                                }
+                                            });
+
+                                            subscription
+                                                .then(subData => {
+                                                    console.log("subdata", subData.id);
+                                                    const customerDetails = new PaymentModel({
+                                                        stripeCustomerId: customer.id,
+                                                        email: req.body.email,
+                                                        cardDetails: cardDetails,
+                                                        subscriptionId: subData.id
+                                                    });
+                                                    customerDetails.save()
+                                                        .then(result => {
+                                                            console.log("customer details added in payment model");
+                                                        })
+                                                        .catch(error => {
+                                                            console.log(error, "erro in saving customer details in payment model");
+                                                        });
+                                                    res.send({ data: subData.customer, success: true, message: "card added and status updated, and 3 days trial started" });
                                                 })
-
-                                            const customerDetails = new PaymentModel({
-                                                stripeCustomerId : customer.id,
-                                                email : req.body.email,
-                                                cardDetails : cardDetails
-                                            });
-                                            customerDetails.save()
-                                            .then(result =>{
-                                                console.log("customer details added in payment model");
-                                            })
-                                            .catch(error =>{
-                                                console.log(error, "erro in saving customer details in payment model");
-                                            });
-
-                                            const subscription =  stripe.subscriptions.create({
-                                                customer: customer.id,
-                                                items: [
-                                                  {
-                                                    plan: 'plan_IHlzrqE23U4iVi',
-                                                  },
-                                                ],
-                                                trial_period_days: 3
-                                              })
-                                              .then(result =>{
-                                                  console.log("result", result);
-                                              })
-                                              .catch(error =>{
-                                                  console.log("error", error);
-                                              })
-                                            
-                                            console.log("subscription", subscription);
-                                            res.send({data : subscription, success :true, message : "card added with status updated, and 3 days trial started"});
-
+                                                .catch(error => {
+                                                    res.send({ error: error });
+                                                })
                                         })
                                         .catch(error => {
                                             console.log("error in card adding with token", error);
-                                            res.send({error : error, success : false, message : "token generation error for payment"});
+                                            res.send({ error: error, success: false, message: "token generation error for payment" });
                                         })
                                 })
                                 .catch(error => {
                                     console.log("error", error);
-                                    res.send({error : error, success : false, message : "card add error in stripe"});
-                                })
-                           
+                                    res.send({ error: error, success: false, message: "card add error in stripe" });
+                                });
                         }
                     }
                 });

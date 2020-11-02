@@ -17,6 +17,8 @@ router.put('/imageUpload/:token',userHandler.profilePictureUpload);
 
 router.post('/viewAllPlan', userHandler.viewAllPlan);
 
+router.post('/cancelTrial/:stripeCustomerId', userHandler.cancelTrial);
+
 // router.post('/subscribePlan', userHandler)
 
 module.exports = router;
