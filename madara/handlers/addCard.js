@@ -122,7 +122,8 @@ module.exports.addCard = async (req, res) => {
             }
         }
     })
-}
+};
+
 
 
 

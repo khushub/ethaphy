@@ -84,6 +84,7 @@ module.exports.createCounselor = async function (req, res) {
                 attendedSchool: req.body.attendedSchool,
                 graduatedYear: req.body.graduatedYear,
                 howYouhearAboutUs: req.body.howYouhearAboutUs,
+                registerationToken : Helper.generateregisterationToken(req.body.email)
               });
 
               let mailTransport = nodemailer.createTransport({

@@ -19,6 +19,8 @@ router.post('/viewAllPlan', userHandler.viewAllPlan);
 
 router.post('/cancelTrial/:stripeCustomerId', userHandler.cancelTrial);
 
-// router.post('/subscribePlan', userHandler)
+router.post('/cardUpdate/:stripeCustomerId', userHandler.updateCard);
+
+router.post('/subscribePlan/:stripeCustomerId', userHandler.subscribePlan);
 
 module.exports = router;

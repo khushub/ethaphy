@@ -110,7 +110,7 @@ module.exports.createUser = async function (req, res) {
             medicinestatus: req.body.medicinestatus,
             ready: req.body.ready,
             deleted: req.body.deleted,
-            forgotPasswordToken : Helper.generateForgotPasswordToken(req.body.email)
+            registerationToken : Helper.generateregisterationToken(req.body.email)
           });
           user.save((error, response) => {
             if (error) {
@@ -341,7 +341,7 @@ module.exports.getQuestions = (req, res) => {
 // View all subscription plan
 
 module.exports.viewAllPlan = async (req, res)=>{
-  const products = await stripe.products.list({
+  const products = await stripe.plans.list({
       limit: 2,
     })
     .then(products =>{
@@ -350,20 +350,30 @@ module.exports.viewAllPlan = async (req, res)=>{
     .catch(error =>{
         res.send({error : error, message : "plan fetch error"});
     });
+    console.log(products);
 }
 
 
 module.exports.subscribePlan = async (req, res) => {
-  const products = await stripe.products.list({
-    limit: 2,
-  })
-    .then(products => {
-      Payment.findOne({email : req.body.email});
-      res.send({ data: products })
-    })
-    .catch(error => {
-      res.send({ error: error, message: "plan fetch error" });
-    });
+      await stripe.subscriptions.create({
+        customer: req.params.stripeCustomerId,
+        items: [ { price : 'price_1HkPFiHzA0lAtLhAwG4rDcj1'} ]
+      })
+      .then(subscription =>{
+        console.log("subscripton", subscription);
+        Payment.updateOne({stripeCustomerId : req.params.stripeCustomerId},
+          {$set : {subscriptionId : subscription.id}})
+          .then(doc =>{
+            console.log("doc", doc);
+            res.send({data : subscription, success : true, message : "plan subscription success"});
+          })
+          .catch(error =>{
+            res.send({error : error, success : false, message : "plan subscriptioin errro for data save in db"});
+          });
+      })
+      .catch(error =>{
+        res.send({error : error, success : false, message : "plan subscription error"});
+      });
 }
 
 
@@ -403,4 +413,47 @@ module.exports.cancelTrial = (req, res) => {
     .catch(error => {
       res.send({ error: error, success: false, message: "trial cancelation error" });
     })
+}
+
+
+
+
+module.exports.updateCard = async (req, res) => {
+  let cardDetails = {
+      card: {
+          number: req.body.cardNumber,
+          exp_month: req.body.expMonth,
+          exp_year: req.body.expYear,
+          cvc: req.body.cvc
+      }
+  }
+  await stripe.tokens.create(cardDetails)
+      .then(token => {
+        console.log("tojke", token.id);
+        console.log("stripe customer id",req.params.stripeCustomerId);
+        let stripeToken = token.id;
+          stripe.customers.createSource(req.params.stripeCustomerId, { source: stripeToken })
+              .then(card => {
+                console.log("card", card.id);
+                   stripe.customers.updateSource(
+                      req.params.stripeCustomerId,
+                      card.id
+                  )
+                  Payment.updateOne({stripeCustomerId :req.params.stripeCustomerId},
+                          { $set: { cardDetails: cardDetails}})
+                          .then(result => {
+                            console.log("result", result);
+                          })
+                          .catch(error => {
+                            console.log("error", error);
+                          });
+                  res.send({data : card, success : true, message : "card details updated"});
+              })
+              .catch(error =>{
+                  res.send({error: error, success :false, message : "card update error"});
+              });
+      })
+      .catch(error =>{
+          res.send({error: error, success :false, message : "token create error in card update"});
+      })
 }

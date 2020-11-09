@@ -28,13 +28,13 @@ const Helper = {
         return token;
     },
 
-    generateForgotPasswordToken(email){
-        const forgotPasswordToken = jwt.sign({
+    generateregisterationToken(email){
+        const registerationToken = jwt.sign({
             email : email
         },
-        myEnv.parsed.FORGOT_PASSWORD_SECRET
+        myEnv.parsed.REGISTERATION_SECRET
         );
-        return forgotPasswordToken;
+        return registerationToken;
     }
 }
 module.exports = Helper;
