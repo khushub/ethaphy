@@ -109,15 +109,18 @@ module.exports.createUser = async function (req, res) {
             painorillness: req.body.painorillness,
             medicinestatus: req.body.medicinestatus,
             ready: req.body.ready,
-            deleted: req.body.deleted,
-            registerationToken : Helper.generateregisterationToken(req.body.email)
+            deleted: req.body.deleted
           });
           user.save((error, response) => {
             if (error) {
               res.send({data : {}, error: error.message, message: "username or email already taken" }).status(500);
             }
             else{
-              let data = response;
+              const token =  Helper.generateregisterationToken(req.body.email);
+              let data = {
+                response,
+                token
+              }
               res.send({ data: data, success: true, message: "User Registered Successfully" });
             }
           })

@@ -83,8 +83,7 @@ module.exports.createCounselor = async function (req, res) {
                 practiceYears: req.body.practiceYears,
                 attendedSchool: req.body.attendedSchool,
                 graduatedYear: req.body.graduatedYear,
-                howYouhearAboutUs: req.body.howYouhearAboutUs,
-                registerationToken : Helper.generateregisterationToken(req.body.email)
+                howYouhearAboutUs: req.body.howYouhearAboutUs
               });
 
               let mailTransport = nodemailer.createTransport({
@@ -107,7 +106,11 @@ module.exports.createCounselor = async function (req, res) {
                   res.send({ data: {}, error: error.message, message: "username or email already taken" }).status(500);
                 }
                 else {
-                  let data = response;
+                  const token = Helper.generateregisterationToken(req.body.email);
+                  let data = {
+                    response,
+                    token
+                  }
                   mailTransport.sendMail(mailDetails, (error, response) =>{
                     if(error){
                       res.send({data : {}, success : false, error, message :'Error in mail send in user registration'});
