@@ -1,4 +1,3 @@
-const Counselor = require('../models/counselorModel');
 const Helper = require('../handlers/helper');
 var logger = require('log4js').getLogger();
 const multer = require('multer');
@@ -6,6 +5,9 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 
 
+// required model
+const Counselor = require('../models/counselorModel');
+const Slot = require('../models/slotModel');
 
 
 
@@ -208,3 +210,119 @@ module.exports.createCounselor = async function (req, res) {
       res.send({data : {}, success : false,error, message : "Something wrong with request"});
     }
   }
+
+
+module.exports.addTimeSlot = (req,res) =>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    const slot = new Slot({
+      counselorId : userId,
+      date : new Date(),
+      slot : req.body.slot
+    });
+    console.log("slot", slot);
+    slot.save()
+    .then(response=>{
+      console.log("response", response);
+      res.send({data : response, success : true, message : "time slot added"});
+    })
+    .catch(error =>{
+      console.log("error", error);
+      res.send({error : error, success : false, message : "error at sloting"});
+    })
+  } 
+  catch (error) {
+    console.log("error", error);
+    res.send({error : error, success : false, message : "something is wrong with request"});
+  }
+}
+
+
+module.exports.getTimeSlots = (req, res) =>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    Slot.find({counselorId : userId}, (error, doc) =>{
+      if(error){
+        res.send({error : error, success : false, message : "DB error"});
+      }
+      else{
+        if(!doc){
+          res.send({data : {}, success : false, message : "no data found, something's worng with token"});
+        }
+        else{
+          res.send({data : doc, success : true, message : "got all data"});
+        }
+      }
+    })
+  }
+   catch (error) {
+    res.send({error : error, success : false, message : "Invalid request : something is wrong with request"});
+  }
+}
+
+
+module.exports.disableSlotsByTime = (req, res) => {
+  try {
+    let { userId } = jwt.decode(req.params.token);
+    Slot.find({ $or: [{ counselorId: userId }, { date: new Date() }] })
+    .then(doc =>{
+      for(let i=0; i<doc[0].slot.length; i++){
+        console.log(doc[0].slot[i].time);
+        if(doc[0].slot[i].time === req.body.time){
+          doc[0].slot[i].status = 'inactive'
+          console.log(doc[0].slot[i].status, "         ", req.body.time);
+          doc[0].save((error, result) =>{
+            if(error){
+              res.send({error : error, success : false, message : "DB error during disable time slot"});
+            }
+            else{
+              if(!result){
+                res.send({data : {}, success : false, message : "time slot didn't disabled"});
+              }
+              else{
+                res.send(({data : result, success : false, message : "time slot been disabled"}));
+              }
+            }
+          });
+        }
+      }
+    })
+    .catch(error =>{
+      console.log("error", error);
+      res.send({error : error, success : false, message : "DB error while finding time slot"});
+    })
+  }
+  catch (error) {
+    res.send({ error: error, success: false, message: "Invalid request : something is wrong with request" });
+  }
+}
+
+
+module.exports.disableSlotsByDate = (req, res) => {
+  try {
+    let { userId } = jwt.decode(req.params.token);
+    Slot.findOneAndUpdate({ $or: [{ counselorId: userId }, { date: new Date() }] },
+      { $set: { status: 'inactive' } },
+      { new: true },
+      (error, doc) => {
+        if (error) {
+          console.log("error in DB", error);
+          res.send({ error: error, success: false, message: "DB error" });
+        }
+        else {
+          if (!doc) {
+            console.log("no data found");
+            res.send({ data: {}, success: false, message: "no data found" });
+          }
+          else {
+            console.log("status disabled of this date", doc);
+            res.send({ data: doc, success: true, message: "time slot disabled" });
+          }
+        }
+      })
+  }
+  catch (error) {
+    res.send({ error: error, success: false, message: "Invalid request : something is wrong with request" });
+  }
+}
+

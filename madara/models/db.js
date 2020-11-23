@@ -7,7 +7,9 @@ const DB_URL = myEnv.parsed.DB_URL;
 const options = {
   poolSize: 20,
   useNewUrlParser: true,
-  useUnifiedTopology: true
+  useUnifiedTopology: true,
+  useFindAndModify : false,
+  useCreateIndex: true,
 };
 mongoose.connect(DB_URL, options);
 var db = mongoose.connection;

@@ -68,7 +68,7 @@ app.use('/stripe', stripePlanRoute);
 
 app.listen(port, () => {
 	logger.info(`User API running on localhost:${port}`);
-	console.log(`User API running on localhost:${port}`)
+	console.log(`Server started on localhost:${port}`)
 });
 
 

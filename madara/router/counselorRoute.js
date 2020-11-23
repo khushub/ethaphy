@@ -9,6 +9,15 @@ router.post('/register',counselorHandler.createCounselor);
 
 router.get('/:token', counselorHandler.getCounselor);
 
+router.post('/addTimeSlot/:token', counselorHandler.addTimeSlot);
+
+router.get('/getAllSlots/:token', counselorHandler.getTimeSlots);
+
+router.put('/disableSlotsByTime/:token', counselorHandler.disableSlotsByTime);
+
+router.put('/disableSlotsByDate/:token', counselorHandler.disableSlotsByDate);
+
+
 module.exports = router;
 
 
