@@ -99,7 +99,7 @@ module.exports.addCard = async (req, res) => {
                                                             console.log("customer details added in payment model");
                                                         })
                                                         .catch(error => {
-                                                            console.log(error, "erro in saving customer details in payment model");
+                                                            console.log(error, "error in saving customer details in payment model");
                                                         });
                                                     res.send({ data: subData.customer, success: true, message: "card added and status updated, and 3 days trial started" });
                                                 })

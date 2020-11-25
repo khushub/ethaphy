@@ -4,24 +4,18 @@ const Schema = mongoose.Schema;
 
 const slotSchema = new Schema({
     counselorId : {type : String},
-    date : {type : Date},
+    date : {type : String},
     status : {type : String, default : 'active'},
-    slot : [
-        {
-            time : {type : String},
-            status : {type : String, default : 'active'}
-        }
-    ]
+    slot : {type : Array}
 });
 
 module.exports = mongoose.model('Slot', slotSchema);
 
 
 
-// slot : [
+// [
 //     {
-//         date : { type : Date},
-//         time : { type : Array},
-//         status : { type : String, default : 'active'}
+//         time : {type : String},
+//         status : {type : Number, default : 0}
 //     }
 // ]
