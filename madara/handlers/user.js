@@ -345,7 +345,7 @@ module.exports.getQuestions = (req, res) => {
 
 module.exports.viewAllPlan = async (req, res)=>{
   const products = await stripe.plans.list({
-      limit: 2,
+      limit: 4,
     })
     .then(products =>{
       res.send({data : products, success : true})  
@@ -353,30 +353,33 @@ module.exports.viewAllPlan = async (req, res)=>{
     .catch(error =>{
         res.send({error : error, message : "plan fetch error"});
     });
-    console.log(products);
 }
 
 
 module.exports.subscribePlan = async (req, res) => {
-      await stripe.subscriptions.create({
-        customer: req.params.stripeCustomerId,
-        items: [ { price : 'price_1HkPFiHzA0lAtLhAwG4rDcj1'} ]
-      })
-      .then(subscription =>{
-        console.log("subscripton", subscription);
-        Payment.updateOne({stripeCustomerId : req.params.stripeCustomerId},
-          {$set : {subscriptionId : subscription.id}})
-          .then(doc =>{
-            console.log("doc", doc);
-            res.send({data : subscription, success : true, message : "plan subscription success"});
-          })
-          .catch(error =>{
-            res.send({error : error, success : false, message : "plan subscriptioin errro for data save in db"});
-          });
-      })
-      .catch(error =>{
-        res.send({error : error, success : false, message : "plan subscription error"});
-      });
+  await stripe.subscriptions.create({
+    customer: req.params.stripeCustomerId,
+    items: [
+      {
+        price: 'monthly counselling plan'
+      }
+    ]
+  })
+    .then(subscription => {
+      console.log("subscripton", subscription);
+      Payment.updateOne({ stripeCustomerId: req.params.stripeCustomerId },
+        { $set: { subscriptionId: subscription.id } })
+        .then(doc => {
+          console.log("doc", doc);
+          res.send({ data: subscription, success: true, message: "plan subscription success" });
+        })
+        .catch(error => {
+          res.send({ error: error, success: false, message: "plan subscriptioin errro for data save in db" });
+        });
+    })
+    .catch(error => {
+      res.send({ error: error, success: false, message: "plan subscription error" });
+    });
 }
 
 

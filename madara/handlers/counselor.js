@@ -207,7 +207,7 @@ module.exports.createCounselor = async function (req, res) {
       })
     } 
     catch (error) {
-      res.send({data : {}, success : false,error, message : "Something wrong with request"});
+      res.send({data : {}, success : false,error, message : "Something gone wrong while decoding token"});
     }
   }
 
@@ -215,69 +215,60 @@ module.exports.createCounselor = async function (req, res) {
  
 module.exports.addTimeSlot = (req, res) => {
   try {
-    // Do scheduling here
+    const daysArray = req.body.daysArray;  // array of availibility of days 
+    // console.log("days array", daysArray);
+    const startTimeArray = req.body.startTimeArray; // start time array of each days
+    // console.log("start time array", startTimeArray);
+    const endTimeArray = req.body.endTimeArray;     // end time array of each days
+    // console.log("end time array", endTimeArray);
 
-    // const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    let from_time = req.body.from_time;
-    let to_time = req.body.to_time;
-
-    // check if start time exceed end time
-
-    if (new Date(from_time).getTime() < new Date(to_time).getTime()) {
-      let date = new Date(from_time);
+    // inserting doc in db for each day    
+    let i = 0;
+    daysArray.forEach(day => {
+      let date = new Date(startTimeArray[i]);
       // console.log("date: ",date.toTimeString().substring(0,5));
+
       // do sloting here
-
       let slot = [];
-      let timeSlot =[];
-      let i = 0;
+      let timeSlot = [];
+      let j = 0;
       let compareTime = date.getTime();
-      // console.log("date: ",date, "  slot: ",slot, "  compare time: ", compareTime);
 
-      while(new Date(to_time).getTime() >= compareTime){
-        slot[i] = date.setMinutes(date.getMinutes() + 30);
+      while (new Date(endTimeArray[i]).getTime() >= compareTime) {
+        slot[j] = date.setMinutes(date.getMinutes() + 30);
 
         // formatting unix time_stamp to date_time 
         let dt = new Date(compareTime);
-        compareTime = slot[i];
-        let months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      
-        let time = dt.getHours() +':'+ dt.getMinutes();
-        timeSlot[i] = time;
-        i++;
-      }
+        compareTime = slot[j];
 
+        let time = dt.getHours() + ':' + dt.getMinutes();
+        timeSlot[j] = time;
+        j++;
+      }
+      console.log("time slot ", timeSlot);
       // inserting slot timing in DB
-      let {userId} = jwt.decode(req.params.token);
+      let { userId } = jwt.decode(req.params.token);
       const slotDB = new Slot({
-        counselorId : userId,
-        date :date.toDateString(),
-        slot : timeSlot.map((time, index, array) =>{
-          if(array[index+1]){
-            console.log(array[index+1]);
-            return { status : 0, time : time.substring(0,5)+"-"+array[index+1]};
-          }
+        counselorId: userId,
+        day: day,
+        slot: timeSlot.map((time, index, array) => {
+          if (array[index + 1] !== undefined) return { status: 0, time: time + "-" + array[index + 1] };
         })
+          .filter((time) => {
+            return time !== undefined;
+          })
       });
       slotDB.save()
-      .then(response=>{
-        // console.log("response", response);
-        // res.send({data : response, success : true, message : "time slot added"});
-        res.send({ data: timeSlot, message: "testing" });
-      })
-      .catch(error =>{
-        console.log("error", error);
-        res.send({error : error, success : false, message : "error at sloting"});
-      })
-    }
-    else {
-      if (new Date(from_time).getTime() > new Date(to_time).getTime()) {
-        console.log("start time must not exceed end time");
-      }
-      else {
-        console.log("Both start and end time are same");
-      }
-    }
+        .then(response => {
+          console.log("response", response);
+        })
+        .catch(error => {
+          console.log("error", error);
+          res.send({ error: error, success: false, message: "error at sloting" });
+        })
+      i++;
+    });
+    res.send({ data: {}, message: "testing" });
   }
   catch (error) {
     res.send({ error: error, message: "something gone wrong while scheduling" });
@@ -377,27 +368,6 @@ module.exports.disableSlotsByDate = (req, res) => {
 
 
 
-// try {
-//   let {userId} = jwt.decode(req.params.token);
-//   const slot = new Slot({
-//     counselorId : userId,
-//     date : new Date(),
-//     slot : req.body.slot
-//   });
-//   slot.save()
-//   .then(response=>{
-//     console.log("response", response);
-//     res.send({data : response, success : true, message : "time slot added"});
-//   })
-//   .catch(error =>{
-//     console.log("error", error);
-//     res.send({error : error, success : false, message : "error at sloting"});
-//   })
-// } 
-// catch (error) {
-//   console.log("error", error);
-//   res.send({error : error, success : false, message : "something is wrong with request"});
-// }
 
 
 
@@ -413,21 +383,82 @@ module.exports.disableSlotsByDate = (req, res) => {
 
 
 
-    // if(from_time.length > 3){
-    //   from_time = from_time.substring(0,2);
-    //   let  = from_time.substring(2,4)
-    // }
-    // else if(to_time.length >3){
-    //   to_time = to_time.substring(0,2);
-    // }
-    // else{
-    //   from_time = from_time.substring(0,1);
-    //   to_time = to_time.substring(0,1);
-    // }
-    // if(from_time.substring(1,3) === "PM" && to_time.substring(1,3) === "PM"){
-    //   from_time = parseInt(from_time.substring(0,1))+ 12;
-    //   to_time  = 9;
-    // }
-    // else{
 
-    // }
+
+
+
+ // Do scheduling here
+
+//  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+//  let from_time = req.body.from_time;
+//  let to_time = req.body.to_time;
+//  let day = days[new Date(from_time).getDay()-1];
+//  console.log("day is : ",day);
+
+
+//  // check if start_time exceed end_time
+
+//  if (new Date(from_time).getTime() < new Date(to_time).getTime()) {
+  //  let date = new Date(from_time);
+  //  // console.log("date: ",date.toTimeString().substring(0,5));
+
+  //  // do sloting here
+  //  let slot = [];
+  //  let timeSlot = [];
+  //  let i = 0;
+  //  let compareTime = date.getTime();
+  //  // console.log("date: ",date, "  slot: ",slot, "  compare time: ", compareTime);
+
+  //  while (new Date(to_time).getTime() >= compareTime) {
+  //    slot[i] = date.setMinutes(date.getMinutes() + 30);
+
+  //    // formatting unix time_stamp to date_time 
+  //    let dt = new Date(compareTime);
+  //    compareTime = slot[i];
+  //    // let months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  //    let time = dt.getHours() + ':' + dt.getMinutes();
+  //    timeSlot[i] = time;
+  //    i++;
+  //  }
+
+  //  // inserting slot timing in DB
+  //  let { userId } = jwt.decode(req.params.token);
+  //  const slotDB = new Slot({
+  //    counselorId: userId,
+  //    date: date.toDateString(),
+  //    slot: timeSlot.map((time, index, array) => {
+  //             if (array[index + 1] !== undefined) 
+  //              return { status: 0, time: time.substring(0, 5) + "-" + array[index + 1] };
+  //             })
+  //             .filter((time) => {
+  //                return time !== undefined;
+  //             })
+  //          });
+  //    slotDB.save()
+  //    .then(response => {
+  //      // console.log("response", response);
+  //      // res.send({data : response, success : true, message : "time slot added"});
+  //      res.send({ data: timeSlot, message: "testing" });
+  //    })
+  //    .catch(error => {
+  //      console.log("error", error);
+  //      res.send({ error: error, success: false, message: "error at sloting" });
+  //    })
+//  }
+//  else {
+//    if (new Date(from_time).getTime() > new Date(to_time).getTime()) {
+//      console.log("start time must not exceed end time");
+//    }
+//    else {
+//      console.log("Both start and end time are same");
+//    }
+//  }
+
+
+
+
+
+
+

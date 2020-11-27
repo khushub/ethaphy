@@ -4,7 +4,7 @@ const Schema = mongoose.Schema;
 
 const slotSchema = new Schema({
     counselorId : {type : String},
-    date : {type : String},
+    day : {type : String},
     status : {type : String, default : 'active'},
     slot : {type : Array}
 });

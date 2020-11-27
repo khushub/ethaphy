@@ -9,7 +9,6 @@ module.exports.createMonthlyPlans = async (req, res) => {
         name: 'monthly counselling plan'
     })
         .then(product => {
-            console.log("product", product.id);
             const plan = stripe.plans.create({
                 amount: 2000,
                 currency: 'usd',
@@ -23,8 +22,6 @@ module.exports.createMonthlyPlans = async (req, res) => {
                 .catch(error => {
                     res.send({ data: {}, success: false, error: error, message: "error in monthly plan creation" });
                 });
-
-            console.log("plan created", plan);
         })
 }
 
@@ -48,7 +45,5 @@ module.exports.createWeeklyPlans = async (req, res) => {
                 .catch(error => {
                     res.send({ data: {}, success: false, error: error, message: "error in weekly plan creation" });
                 });
-
-            console.log("plan created", plan);
         })
 }
