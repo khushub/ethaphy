@@ -9,7 +9,7 @@ module.exports.createMonthlyPlans = async (req, res) => {
         name: 'monthly counselling plan'
     })
         .then(product => {
-            const plan = stripe.plans.create({
+            const plan = stripe.prices.create({
                 amount: 2000,
                 currency: 'usd',
                 interval: 'month',

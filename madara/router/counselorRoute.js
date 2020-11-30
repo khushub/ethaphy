@@ -11,11 +11,11 @@ router.get('/:token', counselorHandler.getCounselor);
 
 router.post('/addTimeSlot/:token', counselorHandler.addTimeSlot);
 
-router.get('/getAllSlots/:token', counselorHandler.getTimeSlots);
+router.get('/getAllSlots/:token', counselorHandler.getAllSlots);
 
 router.put('/disableSlotsByTime/:token', counselorHandler.disableSlotsByTime);
 
-router.put('/disableSlotsByDate/:token', counselorHandler.disableSlotsByDate);
+router.put('/disableSlotsByDay/:token', counselorHandler.disableSlotsByDay);
 
 
 module.exports = router;

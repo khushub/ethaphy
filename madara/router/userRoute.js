@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const userHandler = require('../handlers/user');
+const agoraHandler = require('../handlers/agoraToken')
 
 router.post('/login', userHandler.login);
 
@@ -22,5 +23,7 @@ router.post('/cancelTrial/:stripeCustomerId', userHandler.cancelTrial);
 router.post('/cardUpdate/:stripeCustomerId', userHandler.updateCard);
 
 router.post('/subscribePlan/:stripeCustomerId', userHandler.subscribePlan);
+
+router.post('/videoCallToken/:token', agoraHandler.generateAgoraToken);
 
 module.exports = router;

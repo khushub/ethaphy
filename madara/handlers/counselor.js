@@ -215,12 +215,23 @@ module.exports.createCounselor = async function (req, res) {
  
 module.exports.addTimeSlot = (req, res) => {
   try {
+    let { userId } = jwt.decode(req.params.token); // sepearting userid of counselor from  token
+
+    // first delete all previous slots for that counselor
+    Slot.deleteMany({counselorId : userId})
+    .then(result =>{
+      console.log("result", result);
+    })
+    .catch(error => {
+      console.log("error: ", error);
+    })
+
+
     const daysArray = req.body.daysArray;  // array of availibility of days 
-    // console.log("days array", daysArray);
+
     const startTimeArray = req.body.startTimeArray; // start time array of each days
-    // console.log("start time array", startTimeArray);
+
     const endTimeArray = req.body.endTimeArray;     // end time array of each days
-    // console.log("end time array", endTimeArray);
 
     // inserting doc in db for each day    
     let i = 0;
@@ -245,9 +256,8 @@ module.exports.addTimeSlot = (req, res) => {
         timeSlot[j] = time;
         j++;
       }
-      console.log("time slot ", timeSlot);
+
       // inserting slot timing in DB
-      let { userId } = jwt.decode(req.params.token);
       const slotDB = new Slot({
         counselorId: userId,
         day: day,
@@ -276,7 +286,7 @@ module.exports.addTimeSlot = (req, res) => {
 }
 
 
-module.exports.getTimeSlots = (req, res) =>{
+module.exports.getAllSlots = (req, res) =>{
   try {
     let {userId} = jwt.decode(req.params.token);
     Slot.find({counselorId : userId}, (error, doc) =>{
@@ -285,10 +295,15 @@ module.exports.getTimeSlots = (req, res) =>{
       }
       else{
         if(!doc){
-          res.send({data : {}, success : false, message : "no data found, something's worng with token"});
+          res.send({data : {}, success : false, message : "no data found: No data in DB or incorrect token"});
         }
         else{
-          res.send({data : doc, success : true, message : "got all data"});
+          let slots = [];
+          for(let i=0; i<doc.length;i++){
+            slots[i] = doc[i].slot;
+          }
+          
+          res.send({slots, success : true, message : "got all data"});
         }
       }
     })
@@ -301,34 +316,13 @@ module.exports.getTimeSlots = (req, res) =>{
 
 module.exports.disableSlotsByTime = (req, res) => {
   try {
+    const daysArray = req.body.days;
+    const slotsArray = req.body.slots;
     let { userId } = jwt.decode(req.params.token);
-    Slot.find({ $or: [{ counselorId: userId }, { date: new Date() }] })
-    .then(doc =>{
-      for(let i=0; i<doc[0].slot.length; i++){
-        console.log(doc[0].slot[i].time);
-        if(doc[0].slot[i].time === req.body.time){
-          doc[0].slot[i].status = 1;
-          console.log(doc[0].slot[i].status, "         ", req.body.time);
-          doc[0].save((error, result) =>{
-            if(error){
-              res.send({error : error, success : false, message : "DB error during disable time slot"});
-            }
-            else{
-              if(!result){
-                res.send({data : {}, success : false, message : "time slot didn't disabled"});
-              }
-              else{
-                res.send(({data : result, success : false, message : "time slot been disabled"}));
-              }
-            }
-          });
-        }
-      }
-    })
-    .catch(error =>{
-      console.log("error", error);
-      res.send({error : error, success : false, message : "DB error while finding time slot"});
-    })
+    slotsArray.forEach(slot => {
+      console.log("slot: ",slot);
+      res.send({slot});
+    });
   }
   catch (error) {
     res.send({ error: error, success: false, message: "Invalid request : something is wrong with request" });
@@ -336,10 +330,12 @@ module.exports.disableSlotsByTime = (req, res) => {
 }
 
 
-module.exports.disableSlotsByDate = (req, res) => {
+module.exports.disableSlotsByDay = (req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token);
-    Slot.findOneAndUpdate({ $or: [{ counselorId: userId }, { date: new Date() }] },
+    console.log("userid", userId);
+    let day = req.body.day;
+    Slot.findOneAndUpdate({ $and: [{ counselorId: userId }, { day: day }] },
       { $set: { status: 'inactive' } },
       { new: true },
       (error, doc) => {
@@ -353,14 +349,14 @@ module.exports.disableSlotsByDate = (req, res) => {
             res.send({ data: {}, success: false, message: "no data found" });
           }
           else {
-            console.log("status disabled of this date", doc);
-            res.send({ data: doc, success: true, message: "time slot disabled" });
+            // console.log("status disabled of this date", doc);
+            res.send({ data: doc, success: true, message: "time slot disabled for a day" });
           }
         }
       })
   }
   catch (error) {
-    res.send({ error: error, success: false, message: "Invalid request : something is wrong with request" });
+    res.send({ error: error, success: false, message: "Invalid request or incorrect token" });
   }
 }
 

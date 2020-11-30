@@ -11,7 +11,7 @@ const {response} = require('express');
 const Login = require('../models/loginModel');
 const User = require('../models/userModel');
 const Question = require('../models/questionModel');
-const Payment = require('../models/paymentModel');
+const Trial = require('../models/trialModel');
 const OTP = require('../models/otpModel');
 
 
@@ -367,7 +367,7 @@ module.exports.subscribePlan = async (req, res) => {
   })
     .then(subscription => {
       console.log("subscripton", subscription);
-      Payment.updateOne({ stripeCustomerId: req.params.stripeCustomerId },
+      Trial.updateOne({ stripeCustomerId: req.params.stripeCustomerId },
         { $set: { subscriptionId: subscription.id } })
         .then(doc => {
           console.log("doc", doc);
@@ -385,7 +385,7 @@ module.exports.subscribePlan = async (req, res) => {
 
 
 module.exports.cancelTrial = (req, res) => {
-  Payment.findOne({ stripeCustomerId: req.params.stripeCustomerId })
+  Trial.findOne({ stripeCustomerId: req.params.stripeCustomerId })
     .then(result => {
       console.log(result);
       stripe.subscriptions.update(result.subscriptionId, {
@@ -404,7 +404,7 @@ module.exports.cancelTrial = (req, res) => {
           stripe.charges.create(payDetails)
             .then(charge => {
               console.log("user charged with amount details: ", charge);
-              res.send({ data: charge, success: true, message: "trail cancel and payment done for trial"});
+              res.send({ data: charge, success: true, message: "trail cancel"});
             })
             .catch(error => {
               console.log("error in user charge ", error);
@@ -445,7 +445,7 @@ module.exports.updateCard = async (req, res) => {
                       req.params.stripeCustomerId,
                       card.id
                   )
-                  Payment.updateOne({stripeCustomerId :req.params.stripeCustomerId},
+                  Trial.updateOne({stripeCustomerId :req.params.stripeCustomerId},
                           { $set: { cardDetails: cardDetails}})
                           .then(result => {
                             console.log("result", result);

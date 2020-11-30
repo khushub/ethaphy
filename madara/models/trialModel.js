@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const Schema = mongoose.Schema;
 
-const paymentSchema = new Schema({
+const trialSchema = new Schema({
     stripeCustomerId : {type : String},
     email : {type :  String},
     cardDetails : {type : Object},
@@ -10,4 +10,4 @@ const paymentSchema = new Schema({
     amount : {type :Number}
 });
 
-module.exports = mongoose.model('Payment', paymentSchema);
+module.exports = mongoose.model('Trial', trialSchema);
