@@ -28,9 +28,9 @@ const Helper = {
         return token;
     },
 
-    generateregisterationToken(email){
+    generateregisterationToken(id){
         const registerationToken = jwt.sign({
-            email : email
+            userId : id
         },
         myEnv.parsed.REGISTERATION_SECRET
         );

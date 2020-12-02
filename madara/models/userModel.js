@@ -53,11 +53,15 @@ const userSchema = new Schema({
 
    forgotPasswordToken : {type : String},
 
-   cardDetails : {
-     type :Object
-   },
+   cardDetails : { type :Array },
 
-   address : { type : Object}
+   address : { type : Object},
+
+   stripeCustomerId : {type : String},
+
+   subscriptioinId : { type : String },
+
+   trialCount : {type : Number, default : 0}
 
 } , {timestamps :true});
 

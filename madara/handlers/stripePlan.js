@@ -10,9 +10,9 @@ module.exports.createMonthlyPlans = async (req, res) => {
     })
         .then(product => {
             const plan = stripe.prices.create({
-                amount: 2000,
+                unit_amount: 2000,
                 currency: 'usd',
-                interval: 'month',
+                recurring: {interval: 'month'},
                 product: product.id,
                 active: true
             })
@@ -32,10 +32,10 @@ module.exports.createWeeklyPlans = async (req, res) => {
     })
         .then(product => {
             console.log("product", product.id);
-            const plan = stripe.plans.create({
-                amount: 500,
+            const plan = stripe.prices.create({
+                unit_amount: 500,
                 currency: 'usd',
-                interval: 'week',
+                recurring : {interval: 'week'},
                 product: product.id,
                 active: true
             })

@@ -11,7 +11,7 @@ const {response} = require('express');
 const Login = require('../models/loginModel');
 const User = require('../models/userModel');
 const Question = require('../models/questionModel');
-const Trial = require('../models/trialModel');
+const StripeModel = require('../models/stripeModel');
 const OTP = require('../models/otpModel');
 
 
@@ -21,6 +21,7 @@ const myEnv = require('dotenv').config();
 const secretKey = myEnv.parsed.STRIPE_KEY;
 
 const Stripe = require('stripe');
+const counselorModel = require('../models/counselorModel');
 const stripe = Stripe(secretKey);
 
 
@@ -92,7 +93,6 @@ module.exports.createUser = async function (req, res) {
             mobileNo: req.body.mobileNo,
             password: Helper.hashPassword(req.body.password),
             role: req.body.role,
-            status: req.body.status,
             feeling: req.body.feeling,
             challenge: req.body.challenge,
             arealife: req.body.arealife,
@@ -102,6 +102,7 @@ module.exports.createUser = async function (req, res) {
             age: req.body.age,
             country: req.body.country,
             state: req.body.state,
+            address : req.body.address,
             relationshipstatus: req.body.relationshipstatus,
             genderidentity: req.body.genderidentity,
             sexualorientation: req.body.sexualorientation,
@@ -116,7 +117,7 @@ module.exports.createUser = async function (req, res) {
               res.send({data : {}, error: error.message, message: "username or email already taken" }).status(500);
             }
             else{
-              const token =  Helper.generateregisterationToken(req.body.email);
+              const token =  Helper.generateregisterationToken(response._id);
               let data = {
                 response,
                 token
@@ -320,7 +321,6 @@ module.exports.profilePictureUpload = (req, res) => {
 
 module.exports.getQuestions = (req, res) => {
   try {
-    console.log("get questions by id");
     Question.find({}, (error, doc) => {
       if (error) {
         res.send({ error: error.message, success: false , message: 'DB error during fetch questions'});
@@ -341,11 +341,16 @@ module.exports.getQuestions = (req, res) => {
 }
 
 
+
+// All Stripe Related API's
+
+
+
 // View all subscription plan
 
 module.exports.viewAllPlan = async (req, res)=>{
   const products = await stripe.plans.list({
-      limit: 4,
+      limit: 2,
     })
     .then(products =>{
       res.send({data : products, success : true})  
@@ -355,37 +360,78 @@ module.exports.viewAllPlan = async (req, res)=>{
     });
 }
 
-
+// subscribe a plan or update a plan
 module.exports.subscribePlan = async (req, res) => {
-  await stripe.subscriptions.create({
-    customer: req.params.stripeCustomerId,
-    items: [
-      {
-        price: 'monthly counselling plan'
-      }
-    ]
-  })
-    .then(subscription => {
-      console.log("subscripton", subscription);
-      Trial.updateOne({ stripeCustomerId: req.params.stripeCustomerId },
-        { $set: { subscriptionId: subscription.id } })
-        .then(doc => {
-          console.log("doc", doc);
-          res.send({ data: subscription, success: true, message: "plan subscription success" });
-        })
-        .catch(error => {
-          res.send({ error: error, success: false, message: "plan subscriptioin errro for data save in db" });
-        });
-    })
-    .catch(error => {
-      res.send({ error: error, success: false, message: "plan subscription error" });
-    });
+  try {
+    let { userId } = jwt.decode(req.params.token);
+    console.log(userId);
+    await User.findById(userId)
+      .then(doc => {
+        if (doc.trialCount === 0) {
+          console.log("let see if trial count is zero", doc.trialCount);
+          stripe.subscriptions.create({
+            customer: doc.stripeCustomerId,
+            items: [
+              {
+                price: req.body.priceId
+              }
+            ],
+            trial_period_days: 3
+          })
+            .then(subscription => {
+              console.log("subscripton", subscription);
+              User.findOneAndUpdate({_id : userId},
+                { $set: { subscriptionId: subscription.id , trialCount: 1} })
+                .then(doc => {
+                  console.log("doc", doc);
+                  res.send({ data: subscription, success: true, message: "plan subscription success" });
+                })
+                .catch(error => {
+                  res.send({ error: error, success: false, message: "plan subscriptioin errro for data save in db" });
+                });
+            })
+            .catch(error => {
+              res.send({ error: error, success: false, message: "plan subscription error" });
+            });
+        }
+        else {
+          stripe.subscriptions.update(
+            doc.subscriptionId,
+            {
+              cancel_at_period_end: false,
+              items: [{
+                price: req.body.priceId
+              }]
+            }
+          ).then(subscription => {
+            User.findOneAndUpdate({ _id: userId },
+              { $set: { subscriptionId: subscription.id } })
+              .then(doc => {
+                console.log("doc", doc);
+                res.send({ data: subscription, success: true, message: "subscription update success" });
+              })
+              .catch(error => {
+                res.send({ error: error, success: false, message: "update subscriptioin errro for data save in db" });
+              });
+          })
+          .catch(error =>{
+            res.send({error : error, success : false, message : "subscription update error"});
+          })
+        }
+      })
+      .catch(error => {
+        console.log("error is here: ", error);
+      })
+  }
+  catch (error) {
+    res.send({ error: error, success: false, message: "something went wrong at subscription" });
+  }
 }
 
 
 
 module.exports.cancelTrial = (req, res) => {
-  Trial.findOne({ stripeCustomerId: req.params.stripeCustomerId })
+  StripeModel.findOne({ stripeCustomerId: req.params.stripeCustomerId })
     .then(result => {
       console.log(result);
       stripe.subscriptions.update(result.subscriptionId, {
@@ -445,7 +491,7 @@ module.exports.updateCard = async (req, res) => {
                       req.params.stripeCustomerId,
                       card.id
                   )
-                  Trial.updateOne({stripeCustomerId :req.params.stripeCustomerId},
+                  StripeModel.updateOne({stripeCustomerId :req.params.stripeCustomerId},
                           { $set: { cardDetails: cardDetails}})
                           .then(result => {
                             console.log("result", result);

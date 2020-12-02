@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const userHandler = require('../handlers/user');
-const agoraHandler = require('../handlers/agoraToken')
+const agoraHandler = require('../handlers/agoraToken');
+const stripeHandler = require('../handlers/addCard');
 
 router.post('/login', userHandler.login);
 
@@ -16,14 +17,21 @@ router.put('/resetPassword/:token', userHandler.resetPassword);
 
 router.put('/imageUpload/:token',userHandler.profilePictureUpload);
 
+//Stripe Related Routes
+
 router.post('/viewAllPlan', userHandler.viewAllPlan);
 
 router.post('/cancelTrial/:stripeCustomerId', userHandler.cancelTrial);
 
 router.post('/cardUpdate/:stripeCustomerId', userHandler.updateCard);
 
-router.post('/subscribePlan/:stripeCustomerId', userHandler.subscribePlan);
+router.post('/subscribePlan/:token', userHandler.subscribePlan);
 
-router.post('/videoCallToken/:token', agoraHandler.generateAgoraToken);
+router.post('/addCard', stripeHandler.addCard);
+
+
+// Call Related Routes
+
+router.post('/agoraToken/:token', agoraHandler.generateAgoraToken);
 
 module.exports = router;

@@ -23,13 +23,10 @@ const questionSchema = new Schema({
     
     religousspitual:	{type : Array},
     
-	deleted:	{type : Boolean},		// true/false
+	deleted:	{type : Boolean, default : false},		// true/false
 
 }, {timestamps: true});
 
-questionSchema.methods.setDefaults = function(){
-
-};
 questionSchema.index({deleted: -1});
 
 module.exports = mongoose.model('Question', questionSchema);

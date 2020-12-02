@@ -61,7 +61,7 @@ app.use('/data', questionRoute);
 
 app.use('/counselor', counselorRoute);
 
-app.use('/addCard', addCardRoute);
+// app.use('/addCard', addCardRoute);
 
 app.use('/stripe', stripePlanRoute);
 
