@@ -8,6 +8,7 @@ const nodemailer = require('nodemailer');
 // required model
 const Counselor = require('../models/counselorModel');
 const Slot = require('../models/slotModel');
+const CounselorToUser = require('../models/counselorToUser');
 
 
 
@@ -357,6 +358,29 @@ module.exports.disableSlotsByDay = (req, res) => {
   }
   catch (error) {
     res.send({ error: error, success: false, message: "Invalid request or incorrect token" });
+  }
+}
+
+
+module.exports.userAssignment = (req, res) =>{
+  try {
+      let counselorId = jwt.decode(req.params.token);
+      let userId = req.body.userId
+
+      let assignmentData = new CounselorToUser({
+        counselorId : counselorId,
+        userId : userId
+      });
+      assignmentData.save()
+      .then(doc =>{
+        res.send({doc, success : false, message : "counselor assing to user"});
+      })
+      .catch(error =>{
+        res.send({error, success : false, message : "DB error in counselor assingment"});
+      })
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "something goes wrong in counselor assignment"});
   }
 }
 

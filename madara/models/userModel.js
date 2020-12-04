@@ -49,7 +49,7 @@ const userSchema = new Schema({
 
    ready : {type : Boolean},
 
-   deleted : {type : Boolean},
+   deleted : {type : Boolean, default : false},
 
    forgotPasswordToken : {type : String},
 
@@ -72,7 +72,3 @@ userSchema.methods.setDefaults = function(){
 
 userSchema.index({role:1,deleted: -1});
 module.exports = mongoose.model('User', userSchema);
-
-// cardNumber : { type : String},
-// expMonth : { type : String},
-// expYear : { type : String}

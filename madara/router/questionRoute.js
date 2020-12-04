@@ -26,6 +26,6 @@ router.post('/postQuestion', (req, res) =>{
     catch (error) {
       res.send({error : error, message : "DB error"})  ;
     }
-})
+});
 
 module.exports = router;

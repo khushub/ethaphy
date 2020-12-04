@@ -31,11 +31,16 @@ const addCardRoute = require('./madara/router/addCardRoute');
 
 const stripePlanRoute = require('./madara/router/stripePlanRoute');
 
+const notificationRoute = require('./madara/router/notificationRoute');
+
 // const subscribePlanRoute = require('./madara/router/subscriberRoute');
 
 var port = 4003;   // Port used for user server
 var app = express();
 
+const admin = require("firebase-admin");
+
+const serviceAccount = require('./privateKey.json');
 
 
 app.use(device.capture());
@@ -65,8 +70,13 @@ app.use('/counselor', counselorRoute);
 
 app.use('/stripe', stripePlanRoute);
 
+app.use('/notification', notificationRoute);
+
 
 app.listen(port, () => {
+	admin.initializeApp({
+		credential: admin.credential.cert(serviceAccount)
+	});
 	logger.info(`User API running on localhost:${port}`);
 	console.log(`Server started on localhost:${port}`)
 });

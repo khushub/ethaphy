@@ -48,19 +48,39 @@ module.exports.addCard = async (req, res) => {
                             stripe.customers.createSource(customer.id, { source: token.id })
                                 .then(source => {
                                     console.log("card added", source);
-                                        let card =  {
-                                            cardId: source.id,
-                                            number: req.body.cardNumber,
-                                            expMonth: req.body.expMonth,
-                                            expYear: req.body.expYear,
+                                    let card = {
+                                        cardId: source.id,
+                                        number: req.body.cardNumber,
+                                        expMonth: req.body.expMonth,
+                                        expYear: req.body.expYear,
+                                    }
+                                    const subscription = new Promise((resolve, reject) => {
+                                        const subData = stripe.subscriptions.create({
+                                            customer: customer.id,
+                                            items: [
+                                                {
+                                                    price : 'price_1HtCMdHzA0lAtLhAMLfoUVSa',
+                                                },
+                                            ],
+                                            trial_period_days: 3
+                                        });
+                                        if (subData) {
+                                            resolve(subData);
                                         }
+                                        else {
+                                            reject(new Error("plan assigned error"));
+                                        }
+                                    });
                                     User.updateOne({ email: req.body.email },
-                                        { $set: {
-                                            status: 'active',
-                                            cardDetails : card,
-                                            address : req.body.address,
-                                            stripeCustomerId : customer.id
-                                        } })
+                                        {
+                                            $set: {
+                                                status: 'active',
+                                                cardDetails: card,
+                                                address: req.body.address,
+                                                stripeCustomerId: customer.id,
+                                                subscriptionId : subscription.id
+                                            }
+                                        })
                                         .then(result => {
                                             console.log("User status updated to active: ", result);
                                             res.send({

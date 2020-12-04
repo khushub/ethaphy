@@ -1,6 +1,5 @@
 const router = require('express').Router();
 const userHandler = require('../handlers/user');
-const agoraHandler = require('../handlers/agoraToken');
 const stripeHandler = require('../handlers/addCard');
 
 router.post('/login', userHandler.login);
@@ -32,6 +31,6 @@ router.post('/addCard', stripeHandler.addCard);
 
 // Call Related Routes
 
-router.post('/agoraToken/:token', agoraHandler.generateAgoraToken);
+
 
 module.exports = router;

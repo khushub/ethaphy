@@ -13,6 +13,7 @@ const User = require('../models/userModel');
 const Question = require('../models/questionModel');
 const StripeModel = require('../models/stripeModel');
 const OTP = require('../models/otpModel');
+const CounselorToUser = require('../models/counselorToUser');
 
 
 // required Stripe modules 
@@ -21,7 +22,6 @@ const myEnv = require('dotenv').config();
 const secretKey = myEnv.parsed.STRIPE_KEY;
 
 const Stripe = require('stripe');
-const counselorModel = require('../models/counselorModel');
 const stripe = Stripe(secretKey);
 
 
@@ -92,7 +92,6 @@ module.exports.createUser = async function (req, res) {
             email: req.body.email,
             mobileNo: req.body.mobileNo,
             password: Helper.hashPassword(req.body.password),
-            role: req.body.role,
             feeling: req.body.feeling,
             challenge: req.body.challenge,
             arealife: req.body.arealife,
@@ -117,6 +116,17 @@ module.exports.createUser = async function (req, res) {
               res.send({data : {}, error: error.message, message: "username or email already taken" }).status(500);
             }
             else{
+                let dummyAssignedData = new CounselorToUser({
+                  counselorId : "5fc9cb88db493e26f44e9622",
+                  userId : response.id
+                });
+                dummyAssignedData.save()
+                .then(doc =>{
+                  console.log(" dummy counselor assigned to user");
+                })
+                .catch(error =>{
+                  console.log("user ko dummy counselor assing karne me DB error");
+                })
               const token =  Helper.generateregisterationToken(response._id);
               let data = {
                 response,
@@ -139,6 +149,9 @@ module.exports.createUser = async function (req, res) {
   }
 }
 
+
+
+// forgot password functionality
 let otp;
 
 module.exports.forgotPassword = (req, res) => {
@@ -197,7 +210,7 @@ module.exports.verifyOTP = (req, res) =>{
   }
 }
 
-
+// Reset password 
 module.exports.resetPassword = (req, res) => {
   try {
     const { currentPassword, newPassword, confirmPassword } = req.body;
@@ -243,28 +256,36 @@ module.exports.resetPassword = (req, res) => {
   }
 }
 
-
+// get user data and assigned counselor data
 module.exports.getUserById = (req, res) => {
   try {
-    let {userId} = jwt.decode(req.params.token);
-    User.findById(userId, (error, doc) => {
-      if (error) {
-        res.send({data : {}, error: error.message,success : false, message: 'DB error during fetch user'});
-      }
-      if (!doc) {
-        res.send({data : {}, error: error, success :  false, message: 'No user found with this id'});
-      }
-
-      else {
-        res.send({ data: doc, success: true ,message: 'User fetched for my profile section'});
-      }
+    let { userId } = jwt.decode(req.params.token);
+    CounselorToUser.findOne({ userId: userId })
+    .then(doc =>{
+      User.findById(userId, (error, user) => {
+        if (error) {
+          res.send({ data: {}, error: error.message, success: false, message: 'DB error during fetch user' });
+        }
+        if (!user) {
+          res.send({ data: {}, error: error, success: false, message: 'No user found with this id' });
+        }
+  
+        else {
+          res.send({ data: user, success: true, message: 'User fetched for my profile section' });
+        }
+      })
     })
+    .catch(error =>{
+      res.send({error, success : false, message : "DB error"});
+    });
   }
   catch (error) {
-    res.send({ error: error.message,success: false , message: 'DB error while making request for fetch user'});
+    res.send({ error: error.message, success: false, message: 'DB error while making request for fetch user' });
   }
 }
 
+
+// file upload module
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null,'./uploads/');
@@ -298,16 +319,15 @@ module.exports.profilePictureUpload = (req, res) => {
     else{
       try {
         let {userId} = jwt.decode(req.params.token);
-        
-        User.updateOne({_id : userId},
-          {$set : {profilePhoto : req.file.path}},{upsert : true})
+        User.findByIdAndUpdate({_id : userId},
+          [{$set : {profilePhoto : req.file.path}}],{upsert : true})
           .then((result, error) =>{
             if(error){
               res.send({data : {}, error, success : false, message : "error in file upload"});
             }
-            res.send({data : result, message: "value updated", success: true }).status(201);
+            res.send({data : result, message: "image uploaded", success: true }).status(201);
           })
-          .catch(error => res.send({error, message: "update error", success: false }).status(201));
+          .catch(error => res.send({error, message: "image upload error", success: false }).status(201));
       }
 
       catch (error) {
@@ -318,7 +338,7 @@ module.exports.profilePictureUpload = (req, res) => {
 }
 
 
-
+// get all questions
 module.exports.getQuestions = (req, res) => {
   try {
     Question.find({}, (error, doc) => {
@@ -439,23 +459,6 @@ module.exports.cancelTrial = (req, res) => {
       })
         .then(response => {
           console.log("response", response);
-
-          let payDetails = {
-            amount: 160,
-            currency: 'usd',
-            description: 'user trail charge',
-            customer: req.params.stripeCustomerId
-          };
-
-          stripe.charges.create(payDetails)
-            .then(charge => {
-              console.log("user charged with amount details: ", charge);
-              res.send({ data: charge, success: true, message: "trail cancel"});
-            })
-            .catch(error => {
-              console.log("error in user charge ", error);
-              res.send({ error: error, success: false, message: "pay charge error" });
-            });
         })
         .catch(error => {
           console.log(error, "error");
