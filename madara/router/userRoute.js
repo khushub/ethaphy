@@ -29,7 +29,6 @@ router.post('/subscribePlan/:token', userHandler.subscribePlan);
 router.post('/addCard', stripeHandler.addCard);
 
 
-// Call Related Routes
 
 
 

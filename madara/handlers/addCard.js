@@ -23,7 +23,7 @@ module.exports.addCard = async (req, res) => {
             email: req.body.email,
             address: req.body.address
         }
-        stripe.customers.create(customer, (error, customer) => {
+        await stripe.customers.create(customer, (error, customer) => {
             if (error) {
                 console.log("error in customer create in stripe", error);
                 res.send({
@@ -54,44 +54,44 @@ module.exports.addCard = async (req, res) => {
                                         expMonth: req.body.expMonth,
                                         expYear: req.body.expYear,
                                     }
-                                    const subscription = new Promise((resolve, reject) => {
-                                        const subData = stripe.subscriptions.create({
-                                            customer: customer.id,
-                                            items: [
-                                                {
-                                                    price : 'price_1HtCMdHzA0lAtLhAMLfoUVSa',
-                                                },
-                                            ],
-                                            trial_period_days: 3
-                                        });
-                                        if (subData) {
-                                            resolve(subData);
-                                        }
-                                        else {
-                                            reject(new Error("plan assigned error"));
-                                        }
-                                    });
-                                    User.updateOne({ email: req.body.email },
-                                        {
-                                            $set: {
-                                                status: 'active',
-                                                cardDetails: card,
-                                                address: req.body.address,
-                                                stripeCustomerId: customer.id,
-                                                subscriptionId : subscription.id
-                                            }
-                                        })
-                                        .then(result => {
-                                            console.log("User status updated to active: ", result);
-                                            res.send({
-                                                data: source,
-                                                success: true,
-                                                message: "card added and status updated to active"
+
+                                    const subData =  stripe.subscriptions.create({
+                                        customer: customer.id,
+                                        items: [
+                                            {
+                                                price: 'price_1HtCMdHzA0lAtLhAMLfoUVSa',
+                                            },
+                                        ],
+                                        trial_period_days: 3
+                                    })
+                                    .then(subscription =>{
+                                        console.log("subscription: ", subscription);
+                                        User.updateOne({ email: req.body.email },
+                                            {
+                                                $set: {
+                                                    status: 'active',
+                                                    trialCount : 1,
+                                                    cardDetails: card,
+                                                    address: req.body.address,
+                                                    stripeCustomerId: customer.id,
+                                                    subscriptioinId: subscription.id
+                                                }
+                                            })
+                                            .then(result => {
+                                                console.log("User status updated to active: ", result);
+                                                res.send({
+                                                    data: source,
+                                                    success: true,
+                                                    message: "card added and status updated to active"
+                                                });
+                                            })
+                                            .catch(error => {
+                                                console.log(error, "status update error when card added");
                                             });
-                                        })
-                                        .catch(error => {
-                                            console.log(error, "status update error when card added");
-                                        });
+                                    })
+                                    .catch(error =>{
+                                        res.send({error, success : false, message : "something is wrong with subscription"});
+                                    })
                                 })
                                 .catch(error => {
                                     console.log("error in card adding: ", error);

@@ -60,13 +60,14 @@ module.exports.login = function (req, res) {
       };
 
       logger.info('login: ' + userDetails.username + ' logged in.');
+      userDetails.fcmToken = req.body.fcmToken;
+      userDetails.save().then(doc => console.log("doument: ", doc));
       const token = Helper.generateToken(userDetails._id);
       const data = {
         userDetails,
         token
       }
       return res.send({ data: data,success : true, message: "User login success" }).status(200);
-      // return token;
     })
   }
   catch (error) {
@@ -109,7 +110,8 @@ module.exports.createUser = async function (req, res) {
             painorillness: req.body.painorillness,
             medicinestatus: req.body.medicinestatus,
             ready: req.body.ready,
-            deleted: req.body.deleted
+            deleted: req.body.deleted,
+            fcmToken : req.body.fcmToken
           });
           user.save((error, response) => {
             if (error) {

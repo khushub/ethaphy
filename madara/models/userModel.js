@@ -61,7 +61,9 @@ const userSchema = new Schema({
 
    subscriptioinId : { type : String },
 
-   trialCount : {type : Number, default : 0}
+   trialCount : {type : Number, default : 0},
+
+   fcmToken : { type : String}
 
 } , {timestamps :true});
 
