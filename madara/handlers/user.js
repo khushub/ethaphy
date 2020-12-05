@@ -409,7 +409,7 @@ module.exports.subscribePlan = async (req, res) => {
                   res.send({ data: subscription, success: true, message: "plan subscription success" });
                 })
                 .catch(error => {
-                  res.send({ error: error, success: false, message: "plan subscriptioin errro for data save in db" });
+                  res.send({ error: error, success: false, message: "DB error in plan subscription" });
                 });
             })
             .catch(error => {
