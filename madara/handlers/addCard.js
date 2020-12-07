@@ -25,7 +25,7 @@ module.exports.addCard = async (req, res) => {
         }
         await stripe.customers.create(customer, (error, customer) => {
             if (error) {
-                console.log("error in customer create in stripe", error);
+                console.log(`error in customer create in stripe: ${error}`);
                 res.send({
                     error: error.raw.message,
                     success: false,
@@ -47,7 +47,7 @@ module.exports.addCard = async (req, res) => {
                             // create card in stripe for a particular customer
                             stripe.customers.createSource(customer.id, { source: token.id })
                                 .then(source => {
-                                    console.log("card added", source);
+                                    console.log(`card added ${source}`);
                                     let card = {
                                         cardId: source.id,
                                         number: req.body.cardNumber,
@@ -65,7 +65,7 @@ module.exports.addCard = async (req, res) => {
                                         trial_period_days: 3
                                     })
                                     .then(subscription =>{
-                                        console.log("subscription: ", subscription);
+                                        console.log(`subscription: ${subscription}`);
                                         User.updateOne({ email: req.body.email },
                                             {
                                                 $set: {
@@ -78,7 +78,7 @@ module.exports.addCard = async (req, res) => {
                                                 }
                                             })
                                             .then(result => {
-                                                console.log("User status updated to active: ", result);
+                                                console.log(`User status updated to active: ${result}`);
                                                 res.send({
                                                     data: source,
                                                     success: true,
@@ -94,7 +94,7 @@ module.exports.addCard = async (req, res) => {
                                     })
                                 })
                                 .catch(error => {
-                                    console.log("error in card adding: ", error);
+                                    console.log(`error in card adding: ${error}`);
                                     res.send({
                                         error: error,
                                         success: false,

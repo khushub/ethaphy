@@ -334,14 +334,14 @@ module.exports.disableSlotsByTime = (req, res) => {
 module.exports.disableSlotsByDay = (req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token);
-    console.log("userid", userId);
+    console.log(`userId: ${userId}`);
     let day = req.body.day;
     Slot.findOneAndUpdate({ $and: [{ counselorId: userId }, { day: day }] },
       { $set: { status: 'inactive' } },
       { new: true },
       (error, doc) => {
         if (error) {
-          console.log("error in DB", error);
+          console.log(`error in DB: ${error}`);
           res.send({ error: error, success: false, message: "DB error" });
         }
         else {

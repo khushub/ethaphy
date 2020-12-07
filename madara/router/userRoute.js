@@ -24,7 +24,7 @@ router.post('/cancelTrial/:stripeCustomerId', userHandler.cancelTrial);
 
 router.post('/cardUpdate/:stripeCustomerId', userHandler.updateCard);
 
-router.post('/subscribePlan/:token', userHandler.subscribePlan);
+router.post('/updatePlan/:token', userHandler.updatePlan);
 
 router.post('/addCard', stripeHandler.addCard);
 

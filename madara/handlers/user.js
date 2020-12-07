@@ -124,10 +124,10 @@ module.exports.createUser = async function (req, res) {
                 });
                 dummyAssignedData.save()
                 .then(doc =>{
-                  console.log(" dummy counselor assigned to user");
+                  console.log(`dummy counselor assigned to user`);
                 })
                 .catch(error =>{
-                  console.log("user ko dummy counselor assing karne me DB error");
+                  console.log(`user ko dummy counselor assing karne me DB error`);
                 })
               const token =  Helper.generateregisterationToken(response._id);
               let data = {
@@ -383,73 +383,113 @@ module.exports.viewAllPlan = async (req, res)=>{
 }
 
 // subscribe a plan or update a plan
-module.exports.subscribePlan = async (req, res) => {
+// module.exports.subscribePlan = async (req, res) => {
+//   try {
+//     let { userId } = jwt.decode(req.params.token);
+//     console.log(userId);
+//     await User.findById(userId)
+//       .then(doc => {
+//         if (doc.trialCount === 0) {
+//           console.log("let see if trial count is zero", doc.trialCount);
+//           stripe.subscriptions.create({
+//             customer: doc.stripeCustomerId,
+//             items: [
+//               {
+//                 price: req.body.priceId
+//               }
+//             ],
+//             trial_period_days: 3
+//           })
+//             .then(subscription => {
+//               console.log("subscripton", subscription);
+//               User.findOneAndUpdate({_id : userId},
+//                 { $set: { subscriptionId: subscription.id , trialCount: 1} })
+//                 .then(doc => {
+//                   console.log("doc", doc);
+//                   res.send({ data: subscription, success: true, message: "plan subscription success" });
+//                 })
+//                 .catch(error => {
+//                   res.send({ error: error, success: false, message: "DB error in plan subscription" });
+//                 });
+//             })
+//             .catch(error => {
+//               res.send({ error: error, success: false, message: "plan subscription error" });
+//             });
+//         }
+//         else {
+//           stripe.subscriptions.update(
+//             doc.subscriptionId,
+//             {
+//               cancel_at_period_end: false,
+//               items: [{
+//                 price: req.body.priceId
+//               }]
+//             }
+//           ).then(subscription => {
+//             User.findOneAndUpdate({ _id: userId },
+//               { $set: { subscriptionId: subscription.id } })
+//               .then(doc => {
+//                 console.log("doc", doc);
+//                 res.send({ data: subscription, success: true, message: "subscription update success" });
+//               })
+//               .catch(error => {
+//                 res.send({ error: error, success: false, message: "update subscriptioin errro for data save in db" });
+//               });
+//           })
+//           .catch(error =>{
+//             res.send({error : error, success : false, message : "subscription update error"});
+//           })
+//         }
+//       })
+//       .catch(error => {
+//         console.log("error is here: ", error);
+//       })
+//   }
+//   catch (error) {
+//     res.send({ error: error, success: false, message: "something went wrong at subscription" });
+//   }
+// }
+
+
+
+// Update subscription plan
+
+module.exports.updatePlan = (req, res) =>{
   try {
-    let { userId } = jwt.decode(req.params.token);
-    console.log(userId);
-    await User.findById(userId)
-      .then(doc => {
-        if (doc.trialCount === 0) {
-          console.log("let see if trial count is zero", doc.trialCount);
-          stripe.subscriptions.create({
-            customer: doc.stripeCustomerId,
-            items: [
-              {
-                price: req.body.priceId
-              }
-            ],
-            trial_period_days: 3
-          })
-            .then(subscription => {
-              console.log("subscripton", subscription);
-              User.findOneAndUpdate({_id : userId},
-                { $set: { subscriptionId: subscription.id , trialCount: 1} })
-                .then(doc => {
-                  console.log("doc", doc);
-                  res.send({ data: subscription, success: true, message: "plan subscription success" });
-                })
-                .catch(error => {
-                  res.send({ error: error, success: false, message: "DB error in plan subscription" });
-                });
-            })
-            .catch(error => {
-              res.send({ error: error, success: false, message: "plan subscription error" });
-            });
+    let {userId} = jwt.decode(req.params.token);
+    User.findById(userId)
+    .then(doc =>{
+      stripe.subscriptions.update(
+        doc.subscriptionId,
+        {
+          cancel_at_period_end: false,
+          items: [{
+            price: req.body.priceId
+          }],
+          trial_end : now,
+          billing_cycle_anchor: 'now',
+          payment_behavior: 'pending_if_incomplete'
         }
-        else {
-          stripe.subscriptions.update(
-            doc.subscriptionId,
-            {
-              cancel_at_period_end: false,
-              items: [{
-                price: req.body.priceId
-              }]
-            }
-          ).then(subscription => {
-            User.findOneAndUpdate({ _id: userId },
-              { $set: { subscriptionId: subscription.id } })
-              .then(doc => {
-                console.log("doc", doc);
-                res.send({ data: subscription, success: true, message: "subscription update success" });
-              })
-              .catch(error => {
-                res.send({ error: error, success: false, message: "update subscriptioin errro for data save in db" });
-              });
+      ).then(subscription => {
+        User.findOneAndUpdate({ _id: userId },
+          { $set: { subscriptionId: subscription.id } })
+          .then(doc => {
+            console.log(`doc: ${doc}`);
+            res.send({ data: subscription, success: true, message: "subscription update success" });
           })
-          .catch(error =>{
-            res.send({error : error, success : false, message : "subscription update error"});
-          })
-        }
+          .catch(error => {
+            res.send({ error: error, success: false, message: "DB update error"});
+          });
       })
-      .catch(error => {
-        console.log("error is here: ", error);
+      .catch(error =>{
+        res.send({error : error, success : false, message : "subscription update error"});
       })
+    }) 
   }
-  catch (error) {
-    res.send({ error: error, success: false, message: "something went wrong at subscription" });
+   catch (error) {
+    res.send({error, success : false, message : "something went wrong with subscription update"});
   }
 }
-
 
 
 module.exports.cancelTrial = (req, res) => {
@@ -460,7 +500,7 @@ module.exports.cancelTrial = (req, res) => {
         trial_end: 'now',
       })
         .then(response => {
-          console.log("response", response);
+          console.log(`response: ${response}`);
         })
         .catch(error => {
           console.log(error, "error");

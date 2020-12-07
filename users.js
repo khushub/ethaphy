@@ -56,12 +56,57 @@ app.set('port', port);
 
 logger.level = 'error';
 
+app.post('/webhook', bodyParser.raw({ type : 'application/json'}), (req, res) =>{
+	let event;
+	try {
+		event = JSON.parse(req.body);	
+	} 
+	catch (error) {
+		console.log(`⚠️ Webhook error while parsing basic request.${error.message}`);
+		return res.send({error, success : false, message : error.message});
+	}
 
+	// handle the event
 
-// app.use('http://167.99.88.134:4003/user',userRoute);
+	switch(event.type){
+		case 'customer.subscription.trial_will_end' :
+			// send email to user about trial end;
+			let trialEnd = event.data.object;
+			console.log(`trial end for the user: ${trialEnd.id}`);
+		
+		case 'customer.subscription.updated' :
+			// send update to user that their plan has been updated
+			let subscriptionUpdate = event.data.object;
+			console.log(`subscription plan has been updated for the user ${subscriptionUpdate.id}`);
+
+		case 'invoice.paid' :
+			// send update to user about payment success for subscription
+			let invoice = event.data.object;
+			console.log(`invoice paid for the customer: ${invoice.id}`);
+
+		case 'invoice.payment_failed':
+			// set user status to inactive if payment failed
+			let invoiceFail = event.data.object;
+			console.log(`payment failed for the user: ${invoiceFail.id}`);
+
+		case 'invoice.payment_succeeded' :
+			// do some work if payment succeeded
+			let invoiceSucceeded = event.data.object;
+			console.log(`payment succeeede for the customer: ${invoiceSucceeded.id}`);
+
+		case 'payment_intent.payment_failed' :
+			// change user status because of payment failed
+			let paymentIntentFailed = event.data.object;
+			console.log(`payment failed for user: ${paymentIntentFailed.id}`);
+
+		default : 
+			console.log(`unknown event type`);
+		
+	}
+})
+
 app.use('/user', userRoute);
 
-// app.use('http://167.99.88.134:4003/data', questionRoute);
 app.use('/data', questionRoute);
 
 app.use('/counselor', counselorRoute);
@@ -78,7 +123,7 @@ app.listen(port, () => {
 		credential: admin.credential.cert(serviceAccount)
 	});
 	logger.info(`User API running on localhost:${port}`);
-	console.log(`Server started on localhost:${port}`)
+	console.log(`>>> 🌎 Server started on localhost:${port}`)
 });
 
 
@@ -182,5 +227,6 @@ app.listen(port, () => {
 // 	logger.info(`User API running on localhost:${port}`);
 // 	console.log(`User API running on localhost:${port}`)
 // });
+
 
 
