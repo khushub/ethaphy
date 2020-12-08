@@ -129,7 +129,7 @@ module.exports.createUser = async function (req, res) {
                 .catch(error =>{
                   console.log(`user ko dummy counselor assing karne me DB error`);
                 })
-              const token =  Helper.generateregisterationToken(response._id);
+              const token =  Helper.generateregisterationToken(response.id);
               let data = {
                 response,
                 token
@@ -261,7 +261,8 @@ module.exports.resetPassword = (req, res) => {
 // get user data and assigned counselor data
 module.exports.getUserById = (req, res) => {
   try {
-    let { userId } = jwt.decode(req.params.token);
+    let {userId}  = jwt.decode(req.params.token);
+    console.log(`userid`, userId);
     CounselorToUser.findOne({ userId: userId })
     .then(doc =>{
       User.findById(userId, (error, user) => {

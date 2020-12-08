@@ -9,17 +9,24 @@ var http = require('http');
 var cors = require('cors');   // For cross origin device access
 var path = require('path');
 var mongoose = require('mongoose');
-var request = require('request');
 var logger = require('log4js').configure({  // Logger
 	disableClustering: true,
 	appenders: { app: { type: 'console' } },
 	categories: { default: { appenders: ['app'], level: 'error' } }
 }).getLogger();
 
+// required module
+const myEnv = require('dotenv').config();
+const secretKey = myEnv.parsed.STRIPE_KEY;
+
+const stripe = require('stripe')(secretKey);
 
 var db = require('./madara/models/db');  // DB config module
 
 var userHndl = require('./madara/handlers/user');
+
+
+// required route
 
 const userRoute = require('./madara/router/userRoute');
 
@@ -46,23 +53,39 @@ const serviceAccount = require('./privateKey.json');
 app.use(device.capture());
 app.use(cors());
 app.use(express.urlencoded({extended : false}));
-app.use(express.json());
+// app.use(express.json());
 // app.use(express.static(__dirname));
 
 app.set('port', port);
 
 // app.get('*', function (req, res) { res.send('<h1>Hello world User</h1>'); });
 
+app.use((req, res, next) => {
+	if (req.originalUrl === '/webhook') {
+		next();
+	} else {
+		bodyParser.json()(req, res, next);
+	}
+});
+
 
 logger.level = 'error';
 
 app.post('/webhook', bodyParser.raw({ type : 'application/json'}), (req, res) =>{
 	let event;
+	// const sig = req.header['stripe-signature'];
 	try {
-		event = JSON.parse(req.body);	
+		//JSON.parse(req.body);
+		event = stripe.webhooks.constructEvent(
+			req.body,
+			req.header('stripe-signature'),
+			myEnv.parsed.WEBHOOK_KEY
+		  );
 	} 
 	catch (error) {
-		console.log(`⚠️ Webhook error while parsing basic request.${error.message}`);
+		console.log("req.header(stripe-signature)",req.header('stripe-signature'));
+		console.log("⚠️ Webhook signture verification failed: ",error.message);
+		console.log("check env file and put correct webhook secret");
 		return res.send({error, success : false, message : error.message});
 	}
 
@@ -72,34 +95,47 @@ app.post('/webhook', bodyParser.raw({ type : 'application/json'}), (req, res) =>
 		case 'customer.subscription.trial_will_end' :
 			// send email to user about trial end;
 			let trialEnd = event.data.object;
-			console.log(`trial end for the user: ${trialEnd.id}`);
+			console.log("trial end for the user: ",trialEnd.id);
+			break;
 		
 		case 'customer.subscription.updated' :
 			// send update to user that their plan has been updated
 			let subscriptionUpdate = event.data.object;
-			console.log(`subscription plan has been updated for the user ${subscriptionUpdate.id}`);
+			console.log("subscription plan has been updated for the user: ", subscriptionUpdate.id);
+			break;
 
 		case 'invoice.paid' :
 			// send update to user about payment success for subscription
 			let invoice = event.data.object;
-			console.log(`invoice paid for the customer: ${invoice.id}`);
+			console.log("invoice paid for the customer:", invoice.id);
+			break;
 
 		case 'invoice.payment_failed':
 			// set user status to inactive if payment failed
 			let invoiceFail = event.data.object;
-			console.log(`payment failed for the user: ${invoiceFail.id}`);
+			console.log("payment failed for the user: ",invoiceFail.id);
+			break;
 
 		case 'invoice.payment_succeeded' :
 			// do some work if payment succeeded
 			let invoiceSucceeded = event.data.object;
-			console.log(`payment succeeede for the customer: ${invoiceSucceeded.id}`);
+			console.log("payment succeeede for the customer: ",invoiceSucceeded.id);
+			break;
 
 		case 'payment_intent.payment_failed' :
 			// change user status because of payment failed
 			let paymentIntentFailed = event.data.object;
-			console.log(`payment failed for user: ${paymentIntentFailed.id}`);
+			console.log("payment failed for user: ",paymentIntentFailed.id);
+			break;
+
+		case 'customer.created' : 
+			// do whatever you want to do when a customer is created
+			let customer = event.data.object;
+			console.log("customer created: ", customer);
+			break;
 
 		default : 
+			console.log("event.type", event.type);
 			console.log(`unknown event type`);
 		
 	}
