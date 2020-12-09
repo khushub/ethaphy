@@ -383,6 +383,124 @@ module.exports.viewAllPlan = async (req, res)=>{
     });
 }
 
+
+
+// Update subscription plan
+
+module.exports.updatePlan = (req, res) =>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    User.findById(userId)
+    .then(doc =>{
+      stripe.subscriptions.update(
+        doc.subscriptionId,
+        {
+          cancel_at_period_end: false,
+          items: [{
+            price: req.body.priceId
+          }],
+          trial_end : now,
+          billing_cycle_anchor: 'now',
+          payment_behavior: 'pending_if_incomplete'
+        }
+      ).then(subscription => {
+        User.findOneAndUpdate({ _id: userId },
+          { $set: { subscriptionId: subscription.id } })
+          .then(doc => {
+            console.log(`doc: ${doc}`);
+            res.send({ data: subscription, success: true, message: "subscription update success" });
+          })
+          .catch(error => {
+            res.send({ error: error, success: false, message: "DB update error"});
+          });
+      })
+      .catch(error =>{
+        res.send({error : error, success : false, message : "subscription update error"});
+      })
+    }) 
+  }
+   catch (error) {
+    res.send({error, success : false, message : "something went wrong with subscription update"});
+  }
+}
+
+
+module.exports.cancelTrial = (req, res) => {
+  StripeModel.findOne({ stripeCustomerId: req.params.stripeCustomerId })
+    .then(result => {
+      console.log(result);
+      stripe.subscriptions.update(result.subscriptionId, {
+        trial_end: 'now',
+      })
+        .then(response => {
+          console.log(`response: ${response}`);
+        })
+        .catch(error => {
+          console.log(error, "error");
+          res.send({ error: error, success: false, message: "trial cancelation error" });
+        });
+    })
+    .catch(error => {
+      res.send({ error: error, success: false, message: "trial cancelation error" });
+    })
+}
+
+
+
+
+module.exports.updateCard = async (req, res) => {
+  let cardDetails = {
+    card: {
+      number: req.body.cardNumber,
+      exp_month: req.body.expMonth,
+      exp_year: req.body.expYear,
+      cvc: req.body.cvc
+    }
+  }
+  await stripe.tokens.create(cardDetails)
+    .then(token => {
+      console.log("token", token.id);
+      // console.log("stripe customer id", req.params.stripeCustomerId);
+      let stripeToken = token.id;
+      stripe.customers.createSource(req.body.stripeCustomerId, { source: stripeToken })
+        .then(card => {
+          console.log("card", card.id);
+          stripe.customers.updateSource(
+            req.params.stripeCustomerId,
+            card.id
+          )
+          User.updateOne({ stripeCustomerId: req.params.stripeCustomerId },
+            { $set: { cardDetails: cardDetails } })
+            .then(result => {
+              console.log("result", result);
+            })
+            .catch(error => {
+              console.log("error", error);
+            });
+          res.send({ data: card, success: true, message: "card details updated" });
+        })
+        .catch(error => {
+          res.send({ error: error, success: false, message: "card update error" });
+        });
+    })
+    .catch(error => {
+      res.send({ error: error, success: false, message: "token create error in card update" });
+    })
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // subscribe a plan or update a plan
 // module.exports.subscribePlan = async (req, res) => {
 //   try {
@@ -451,107 +569,3 @@ module.exports.viewAllPlan = async (req, res)=>{
 //   }
 // }
 
-
-
-// Update subscription plan
-
-module.exports.updatePlan = (req, res) =>{
-  try {
-    let {userId} = jwt.decode(req.params.token);
-    User.findById(userId)
-    .then(doc =>{
-      stripe.subscriptions.update(
-        doc.subscriptionId,
-        {
-          cancel_at_period_end: false,
-          items: [{
-            price: req.body.priceId
-          }],
-          trial_end : now,
-          billing_cycle_anchor: 'now',
-          payment_behavior: 'pending_if_incomplete'
-        }
-      ).then(subscription => {
-        User.findOneAndUpdate({ _id: userId },
-          { $set: { subscriptionId: subscription.id } })
-          .then(doc => {
-            console.log(`doc: ${doc}`);
-            res.send({ data: subscription, success: true, message: "subscription update success" });
-          })
-          .catch(error => {
-            res.send({ error: error, success: false, message: "DB update error"});
-          });
-      })
-      .catch(error =>{
-        res.send({error : error, success : false, message : "subscription update error"});
-      })
-    }) 
-  }
-   catch (error) {
-    res.send({error, success : false, message : "something went wrong with subscription update"});
-  }
-}
-
-
-module.exports.cancelTrial = (req, res) => {
-  StripeModel.findOne({ stripeCustomerId: req.params.stripeCustomerId })
-    .then(result => {
-      console.log(result);
-      stripe.subscriptions.update(result.subscriptionId, {
-        trial_end: 'now',
-      })
-        .then(response => {
-          console.log(`response: ${response}`);
-        })
-        .catch(error => {
-          console.log(error, "error");
-          res.send({ error: error, success: false, message: "trial cancelation error" });
-        });
-    })
-    .catch(error => {
-      res.send({ error: error, success: false, message: "trial cancelation error" });
-    })
-}
-
-
-
-
-module.exports.updateCard = async (req, res) => {
-  let cardDetails = {
-      card: {
-          number: req.body.cardNumber,
-          exp_month: req.body.expMonth,
-          exp_year: req.body.expYear,
-          cvc: req.body.cvc
-      }
-  }
-  await stripe.tokens.create(cardDetails)
-      .then(token => {
-        console.log("tojke", token.id);
-        console.log("stripe customer id",req.params.stripeCustomerId);
-        let stripeToken = token.id;
-          stripe.customers.createSource(req.params.stripeCustomerId, { source: stripeToken })
-              .then(card => {
-                console.log("card", card.id);
-                   stripe.customers.updateSource(
-                      req.params.stripeCustomerId,
-                      card.id
-                  )
-                  StripeModel.updateOne({stripeCustomerId :req.params.stripeCustomerId},
-                          { $set: { cardDetails: cardDetails}})
-                          .then(result => {
-                            console.log("result", result);
-                          })
-                          .catch(error => {
-                            console.log("error", error);
-                          });
-                  res.send({data : card, success : true, message : "card details updated"});
-              })
-              .catch(error =>{
-                  res.send({error: error, success :false, message : "card update error"});
-              });
-      })
-      .catch(error =>{
-          res.send({error: error, success :false, message : "token create error in card update"});
-      })
-}

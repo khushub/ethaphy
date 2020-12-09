@@ -54,7 +54,9 @@ const counselorSchema = new Schema({
 
     graduatedYear : {type : String, required : true},
 
-    howYouhearAboutUs : {type : String, required : true}
+    howYouhearAboutUs : {type : String, required : true},
+
+    fcmToken : { type : String}
 
 }, {timestamps : true});
 

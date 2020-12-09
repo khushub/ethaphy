@@ -8,7 +8,7 @@ const stripe = Stripe(secretKey);
 
 // Required Model
 
-const StripeModel = require('../models/stripeModel');
+// const StripeModel = require('../models/stripeModel');
 
 const User = require('../models/userModel');
 
@@ -69,7 +69,7 @@ module.exports.addCard = async (req, res) => {
                                         User.updateOne({ email: req.body.email },
                                             {
                                                 $set: {
-                                                    status: 'active',
+                                                    status: 'trial',
                                                     trialCount : 1,
                                                     cardDetails: card,
                                                     address: req.body.address,
@@ -80,7 +80,7 @@ module.exports.addCard = async (req, res) => {
                                             .then(result => {
                                                 console.log(`User status updated to active: ${result}`);
                                                 res.send({
-                                                    data: source,
+                                                    data: subscription,
                                                     success: true,
                                                     message: "card added and status updated to active"
                                                 });

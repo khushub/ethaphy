@@ -62,6 +62,7 @@ app.set('port', port);
 
 app.use((req, res, next) => {
 	if (req.originalUrl === '/webhook') {
+		console.log("original url: ", req.originalUrl);
 		next();
 	} else {
 		bodyParser.json()(req, res, next);
@@ -95,7 +96,7 @@ app.post('/webhook', bodyParser.raw({ type : 'application/json'}), (req, res) =>
 		case 'customer.subscription.trial_will_end' :
 			// send email to user about trial end;
 			let trialEnd = event.data.object;
-			console.log("trial end for the user: ",trialEnd.id);
+			console.log("trial end for the user: ",trialEnd);
 			break;
 		
 		case 'customer.subscription.updated' :
@@ -106,6 +107,7 @@ app.post('/webhook', bodyParser.raw({ type : 'application/json'}), (req, res) =>
 
 		case 'invoice.paid' :
 			// send update to user about payment success for subscription
+			
 			let invoice = event.data.object;
 			console.log("invoice paid for the customer:", invoice.id);
 			break;

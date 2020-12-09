@@ -86,14 +86,15 @@ module.exports.createCounselor = async function (req, res) {
                 practiceYears: req.body.practiceYears,
                 attendedSchool: req.body.attendedSchool,
                 graduatedYear: req.body.graduatedYear,
-                howYouhearAboutUs: req.body.howYouhearAboutUs
+                howYouhearAboutUs: req.body.howYouhearAboutUs,
+                fcmToken : req.body.fcmToken
               });
 
               let mailTransport = nodemailer.createTransport({
                 service : 'gmail',
                 auth :{
                   user : 'edwy23@gmail.com',
-                  pass : 'Rahul%!8126'
+                  pass : 'Rahul*******'
                 }
               });
 
@@ -109,7 +110,7 @@ module.exports.createCounselor = async function (req, res) {
                   res.send({ data: {}, error: error.message, message: "username or email already taken" }).status(500);
                 }
                 else {
-                  const token = Helper.generateregisterationToken(req.body.email);
+                  const token = Helper.generateregisterationToken(response.id);
                   let data = {
                     response,
                     token
@@ -178,6 +179,8 @@ module.exports.createCounselor = async function (req, res) {
         };
   
         logger.info('login: ' + details.email + ' logged in.');
+        details.fcmToken = req.body.fcmToken;
+        details.save().then(doc => console.log("doument: ", doc));
         const token = Helper.generateToken(details._id);
         const data = {
           details,
