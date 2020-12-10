@@ -20,6 +20,8 @@ router.put('/imageUpload/:token',userHandler.profilePictureUpload);
 
 router.post('/viewAllPlan', userHandler.viewAllPlan);
 
+router.post('/viewSinglePlan', userHandler.viewSinglePlan);
+
 router.post('/cancelTrial/:stripeCustomerId', userHandler.cancelTrial);
 
 router.post('/cardUpdate/:stripeCustomerId', userHandler.updateCard);
@@ -28,7 +30,7 @@ router.post('/updatePlan/:token', userHandler.updatePlan);
 
 router.post('/addCard', stripeHandler.addCard);
 
-
+router.post('/getInvoices/', userHandler.getInvoices);
 
 
 

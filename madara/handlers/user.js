@@ -384,6 +384,68 @@ module.exports.viewAllPlan = async (req, res)=>{
 }
 
 
+module.exports.viewSinglePlan = async (req, res) => {
+  try {
+    let response = {};
+    await stripe.plans.retrieve(req.body.priceId)
+      .then(plan => {
+        console.log("plan is: ", plan);
+        response.amount = plan.amount;
+        stripe.products.retrieve(plan.product)
+          .then(product => {
+            console.log("products is: ", product);
+            response.name = product.name;
+            res.send({ data: response, success: true, message: "Single plan details fetched" });
+          })
+          .catch(error => {
+            res.send({ error, success: false, messages: "product fetch error" });
+          });
+      })
+      .catch(error => {
+        res.send({ error, success: false, message: "error in plan fetch" });
+      });
+  }
+  catch (error) {
+    res.send({ error, success: false, message: "something goes wrong in single plan fetch" });
+  }
+}
+
+
+
+module.exports.getInvoices = async (req, res) =>{
+  try {
+    let customerId = req.body.customerId;  
+    await stripe.invoices.list({
+      customer : customerId,
+      limit : 3
+    })
+    .then(invoices =>{
+      stripe.invoices.retrieve(
+        invoices.data[0].id
+      )
+      .then(invoiceItem =>{
+         let end_date =   new Date(invoiceItem.lines.data[0].period.end*1000).toUTCString();
+        stripe.products.retrieve(invoices.data[0].lines.data[0].price.product)
+        .then(product =>{
+            let invoiceData = {
+              amount_paid : invoiceItem.amount_paid,
+              exp_date : end_date,
+              plan_name : product.name
+            }
+            res.send({data: invoiceData, success : true, message : "product fetched"});
+        });
+      });
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "stripe inovice fetch error"});
+    });
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "something went wrong while invoice collection"});
+  }
+}
+
+
 
 // Update subscription plan
 
