@@ -488,14 +488,14 @@ module.exports.updatePlan = (req, res) =>{
 
 
 module.exports.cancelTrial = (req, res) => {
-  StripeModel.findOne({ stripeCustomerId: req.params.stripeCustomerId })
+  User.findOne({ stripeCustomerId: req.params.stripeCustomerId })
     .then(result => {
       console.log(result);
       stripe.subscriptions.update(result.subscriptionId, {
         trial_end: 'now',
       })
         .then(response => {
-          console.log(`response: ${response}`);
+          console.log("response: ", response);
         })
         .catch(error => {
           console.log(error, "error");
@@ -550,6 +550,34 @@ module.exports.updateCard = async (req, res) => {
     })
 }
 
+
+
+module.exports.validateCard = async (req, res) => {
+  try {
+    let cardDetails = {
+      card: {
+        number: req.body.cardNumber,
+        exp_month: req.body.expMonth,
+        exp_year: req.body.expYear,
+        cvc: req.body.cvc
+      }
+    }
+   const token =  await stripe.tokens.create(cardDetails);
+    console.log("token: ",token);
+    const charge = await stripe.charges.create({
+      amount: 2000,
+      currency: 'inr',
+      source: token.id,
+      description: 'My First Test Charge (created for API docs)',
+      capture : false
+    });
+    console.log("charge object: ", charge);
+    res.send({charge, success: true, message: "card validation is still in process..."});
+  }
+  catch (error) {
+    res.send({error, success : false, message : "something went wrong while card validation"});
+  }
+}
 
 
 

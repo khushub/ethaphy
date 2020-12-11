@@ -32,6 +32,8 @@ router.post('/addCard', stripeHandler.addCard);
 
 router.post('/getInvoices/', userHandler.getInvoices);
 
+router.post('/validateCard', userHandler.validateCard);
+
 
 
 module.exports = router;

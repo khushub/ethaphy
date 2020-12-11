@@ -16,7 +16,7 @@ const counselorSchema = new Schema({
 
     password : {type : String, required : true},
 
-    role : {type : String},
+    role : {type : String, default: 'counselor'},
 
     status : {type : String},
 
