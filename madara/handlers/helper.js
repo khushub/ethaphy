@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { validateCard } = require('./user');
 const myEnv = require('dotenv').config();
 
 const Helper = {
@@ -35,6 +36,6 @@ const Helper = {
         myEnv.parsed.REGISTERATION_SECRET
         );
         return registerationToken;
-    }
+    },
 }
 module.exports = Helper;

@@ -94,7 +94,7 @@ module.exports.createCounselor = async function (req, res) {
                 service : 'gmail',
                 auth :{
                   user : 'edwy23@gmail.com',
-                  pass : 'Rahul*******'
+                  pass : '***********'
                 }
               });
 

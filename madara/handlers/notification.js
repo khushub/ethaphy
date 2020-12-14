@@ -4,6 +4,7 @@ const apn = require('apn');
 const FCM = require('fcm-node');
 const serverkey = require('../../privateKey.json');
 const fcm = new FCM(serverkey);
+const jwt = require('jsonwebtoken');
 
 // required model
 const Counselor = require('../models/counselorModel');
@@ -99,7 +100,7 @@ module.exports.generateAgoraToken = async (req, res) => {
 // Send iOS notification
 module.exports.sendIOSNotification = (req, res) =>{
     try {
-        let {userId}  = req.params.token;
+        let {userId}  = jwt.decode(req.params.token);
         Counselor.findById(userId, (error, doc) =>{
             if(error){
                 return res.send({error : error, success : false, message : "DB error"});
@@ -109,7 +110,7 @@ module.exports.sendIOSNotification = (req, res) =>{
                     return res.send({doc : {}, success : false, message : "No data found"});
                 }
                 else {
-                    let token = doc.agoraToken;
+                    let token = doc.fcmToken;
 
                     let option = {
                       cert :__dirname + '/cert.pem',

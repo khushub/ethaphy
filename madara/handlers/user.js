@@ -5,15 +5,15 @@ const Helper = require('./helper');
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
-const {response} = require('express');
 
 // required models
 const Login = require('../models/loginModel');
 const User = require('../models/userModel');
 const Question = require('../models/questionModel');
-const StripeModel = require('../models/stripeModel');
+// const StripeModel = require('../models/stripeModel');
 const OTP = require('../models/otpModel');
 const CounselorToUser = require('../models/counselorToUser');
+// const 
 
 
 // required Stripe modules 
@@ -412,36 +412,36 @@ module.exports.viewSinglePlan = async (req, res) => {
 
 
 
-module.exports.getInvoices = async (req, res) =>{
+module.exports.getInvoices = async (req, res) => {
   try {
-    let customerId = req.body.customerId;  
+    let customerId = req.body.customerId;
     await stripe.invoices.list({
-      customer : customerId,
-      limit : 3
+      customer: customerId,
+      limit: 3
     })
-    .then(invoices =>{
-      stripe.invoices.retrieve(
-        invoices.data[0].id
-      )
-      .then(invoiceItem =>{
-         let end_date =   new Date(invoiceItem.lines.data[0].period.end*1000).toUTCString();
-        stripe.products.retrieve(invoices.data[0].lines.data[0].price.product)
-        .then(product =>{
-            let invoiceData = {
-              amount_paid : invoiceItem.amount_paid,
-              exp_date : end_date,
-              plan_name : product.name
-            }
-            res.send({data: invoiceData, success : true, message : "product fetched"});
-        });
+      .then(invoices => {
+        stripe.invoices.retrieve(
+          invoices.data[0].id
+        )
+          .then(invoiceItem => {
+            let end_date = new Date(invoiceItem.lines.data[0].period.end * 1000).toUTCString();
+            stripe.products.retrieve(invoices.data[0].lines.data[0].price.product)
+              .then(product => {
+                let invoiceData = {
+                  amount_paid: invoiceItem.amount_paid,
+                  exp_date: end_date,
+                  plan_name: product.name
+                }
+                res.send({ data: invoiceData, success: true, message: "product fetched" });
+              });
+          });
+      })
+      .catch(error => {
+        res.send({ error, success: false, message: "stripe inovice fetch error" });
       });
-    })
-    .catch(error =>{
-      res.send({error, success : false, message : "stripe inovice fetch error"});
-    });
-  } 
+  }
   catch (error) {
-    res.send({error, success : false, message : "something went wrong while invoice collection"});
+    res.send({ error, success: false, message: "something went wrong while invoice collection" });
   }
 }
 
@@ -549,36 +549,6 @@ module.exports.updateCard = async (req, res) => {
       res.send({ error: error, success: false, message: "token create error in card update" });
     })
 }
-
-
-
-module.exports.validateCard = async (req, res) => {
-  try {
-    let cardDetails = {
-      card: {
-        number: req.body.cardNumber,
-        exp_month: req.body.expMonth,
-        exp_year: req.body.expYear,
-        cvc: req.body.cvc
-      }
-    }
-   const token =  await stripe.tokens.create(cardDetails);
-    console.log("token: ",token);
-    const charge = await stripe.charges.create({
-      amount: 2000,
-      currency: 'inr',
-      source: token.id,
-      description: 'My First Test Charge (created for API docs)',
-      capture : false
-    });
-    console.log("charge object: ", charge);
-    res.send({charge, success: true, message: "card validation is still in process..."});
-  }
-  catch (error) {
-    res.send({error, success : false, message : "something went wrong while card validation"});
-  }
-}
-
 
 
 
