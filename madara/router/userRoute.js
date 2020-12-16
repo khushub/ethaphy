@@ -24,7 +24,7 @@ router.post('/viewSinglePlan', userHandler.viewSinglePlan);
 
 router.post('/cancelTrial/:stripeCustomerId', userHandler.cancelTrial);
 
-router.post('/cardUpdate/:stripeCustomerId', userHandler.updateCard);
+router.post('/cardUpdate', userHandler.updateCard);
 
 router.post('/updatePlan/:token', userHandler.updatePlan);
 

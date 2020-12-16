@@ -528,7 +528,7 @@ module.exports.updateCard = async (req, res) => {
         .then(card => {
           console.log("card", card.id);
           stripe.customers.updateSource(
-            req.params.stripeCustomerId,
+            req.body.stripeCustomerId,
             card.id
           )
           User.updateOne({ stripeCustomerId: req.params.stripeCustomerId },
@@ -546,7 +546,7 @@ module.exports.updateCard = async (req, res) => {
         });
     })
     .catch(error => {
-      res.send({ error: error, success: false, message: "token create error in card update" });
+      res.send({ error: error, success: false, message: error.raw.message });
     })
 }
 

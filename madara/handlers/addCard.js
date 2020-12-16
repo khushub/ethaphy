@@ -12,227 +12,117 @@ const User = require('../models/userModel');
 
 
 
-module.exports.addCard = async (req, res) => {
-    try {
-        let cardDetails = {
-            card: {
-                number: req.body.cardNumber,
-                exp_month: req.body.expMonth,
-                exp_year: req.body.expYear,
-                cvc: req.body.cvc
-            }
-        }
-        const token = await stripe.tokens.create(cardDetails);
-        await stripe.charges.create({
-            amount: 2000,
-            currency: 'usd',
-            source: token.id,
-            description: 'My First Test Charge (created for API docs)',
-            capture: false
-        })
-            .then(charge => {
-                const customer = {
-                    name: req.body.name,
-                    email: req.body.email,
-                    address: req.body.address
-                }
-                stripe.customers.create(customer, (error, customer) => {
-                    if (error) {
-                        console.log(`error in customer create in stripe: ${error}`);
-                        res.send({
-                            error: error.raw.message,
-                            success: false,
-                            message: "customer create error in stripe"
-                        });
-                    }
-                    else {
-                        if (customer) {
-                            stripe.tokens.create(cardDetails)
-                                .then(token => {
-                                    // create card in stripe for a particular customer
-                                    stripe.customers.createSource(customer.id, { source: token.id })
-                                        .then(source => {
-                                            console.log(`card added ${source}`);
-                                            let card = {
-                                                cardId: source.id,
-                                                number: req.body.cardNumber,
-                                                expMonth: req.body.expMonth,
-                                                expYear: req.body.expYear,
-                                            }
-
-                                            const subData = stripe.subscriptions.create({
-                                                customer: customer.id,
-                                                items: [
-                                                    {
-                                                        price: 'price_1HtCMdHzA0lAtLhAMLfoUVSa',
-                                                    },
-                                                ],
-                                                trial_period_days: 3
-                                            })
-                                                .then(subscription => {
-                                                    console.log(`subscription: ${subscription}`);
-                                                    User.updateOne({ email: req.body.email },
-                                                        {
-                                                            $set: {
-                                                                status: 'trial',
-                                                                trialCount: 1,
-                                                                cardDetails: card,
-                                                                address: req.body.address,
-                                                                stripeCustomerId: customer.id,
-                                                                subscriptioinId: subscription.id
-                                                            }
-                                                        })
-                                                        .then(result => {
-                                                            console.log(`User status updated to active: ${result}`);
-                                                            res.send({
-                                                                data: subscription,
-                                                                success: true,
-                                                                message: "card added and status updated to active"
-                                                            });
-                                                        })
-                                                        .catch(error => {
-                                                            console.log(error, "status update error when card added");
-                                                        });
-                                                })
-                                                .catch(error => {
-                                                    res.send({
-                                                        error, 
-                                                        success: false, 
-                                                        message: "something is wrong with subscription" 
-                                                    });
-                                                })
-                                        })
-                                        .catch(error => {
-                                            console.log(`error in card adding: ${error}`);
-                                            res.send({
-                                                error: error,
-                                                success: false,
-                                                message: "error in add card: filed missing or token not generated"
-                                            });
-                                        })
-                                })
-                                .catch(error => {
-                                    console.log("error", error);
-                                    res.send({ error: error, success: false, message: "card add error in stripe" });
-                                });
-                        }
-                    }
-                });
-            })
-            .catch(error => {
-                res.send({ error, success: false, message: error.raw.decline_code});
-            })
-    }
-    catch (error) {
-        res.send({ error: error, success: false, message: "Something went wrong in card add" });
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
 
 // module.exports.addCard = async (req, res) => {
 //     try {
-//         // let stripeToken;
-//         const customer = {
-//             name: req.body.name,
-//             email: req.body.email,
-//             address: req.body.address
-//         }
-//         await stripe.customers.create(customer, (error, customer) => {
-//             if (error) {
-//                 console.log(`error in customer create in stripe: ${error}`);
-//                 res.send({
-//                     error: error.raw.message,
-//                     success: false,
-//                     message: "customer create error in stripe"
-//                 });
+//         let cardDetails = {
+//             card: {
+//                 number: req.body.cardNumber,
+//                 exp_month: req.body.expMonth,
+//                 exp_year: req.body.expYear,
+//                 cvc: req.body.cvc
 //             }
-//             else {
-//                 if (customer) {
-//                     let cardDetails = {
-//                         card: {
-//                             number: req.body.cardNumber,
-//                             exp_month: req.body.expMonth,
-//                             exp_year: req.body.expYear,
-//                             cvc: req.body.cvc
-//                         }
+//         }
+//         const token = await stripe.tokens.create(cardDetails);
+//         await stripe.charges.create({
+//             amount: 2000,
+//             currency: 'usd',
+//             source: token.id,
+//             description: 'My First Test Charge (created for API docs)',
+//             capture: false
+//         })
+//             .then(charge => {
+//                 const customer = {
+//                     name: req.body.name,
+//                     email: req.body.email,
+//                     address: req.body.address
+//                 }
+//                 stripe.customers.create(customer, (error, customer) => {
+//                     if (error) {
+//                         console.log(`error in customer create in stripe: ${error}`);
+//                         res.send({
+//                             error: error.raw.message,
+//                             success: false,
+//                             message: "customer create error in stripe"
+//                         });
 //                     }
-//                     stripe.tokens.create(cardDetails)
-//                         .then(token => {
-//                             // create card in stripe for a particular customer
-//                             stripe.customers.createSource(customer.id, { source: token.id })
-//                                 .then(source => {
-//                                     console.log(`card added ${source}`);
-//                                     let card = {
-//                                         cardId: source.id,
-//                                         number: req.body.cardNumber,
-//                                         expMonth: req.body.expMonth,
-//                                         expYear: req.body.expYear,
-//                                     }
+//                     else {
+//                         if (customer) {
+//                             stripe.tokens.create(cardDetails)
+//                                 .then(token => {
+//                                     // create card in stripe for a particular customer
+//                                     stripe.customers.createSource(customer.id, { source: token.id })
+//                                         .then(source => {
+//                                             console.log(`card added ${source}`);
+//                                             let card = {
+//                                                 cardId: source.id,
+//                                                 number: req.body.cardNumber,
+//                                                 expMonth: req.body.expMonth,
+//                                                 expYear: req.body.expYear,
+//                                             }
 
-//                                     const subData =  stripe.subscriptions.create({
-//                                         customer: customer.id,
-//                                         items: [
-//                                             {
-//                                                 price: 'price_1HtCMdHzA0lAtLhAMLfoUVSa',
-//                                             },
-//                                         ],
-//                                         trial_period_days: 3
-//                                     })
-//                                     .then(subscription =>{
-//                                         console.log(`subscription: ${subscription}`);
-//                                         User.updateOne({ email: req.body.email },
-//                                             {
-//                                                 $set: {
-//                                                     status: 'trial',
-//                                                     trialCount : 1,
-//                                                     cardDetails: card,
-//                                                     address: req.body.address,
-//                                                     stripeCustomerId: customer.id,
-//                                                     subscriptioinId: subscription.id
-//                                                 }
+//                                             const subData = stripe.subscriptions.create({
+//                                                 customer: customer.id,
+//                                                 items: [
+//                                                     {
+//                                                         price: 'price_1HtCMdHzA0lAtLhAMLfoUVSa',
+//                                                     },
+//                                                 ],
+//                                                 trial_period_days: 3
 //                                             })
-//                                             .then(result => {
-//                                                 console.log(`User status updated to active: ${result}`);
-//                                                 res.send({
-//                                                     data: subscription,
-//                                                     success: true,
-//                                                     message: "card added and status updated to active"
-//                                                 });
-//                                             })
-//                                             .catch(error => {
-//                                                 console.log(error, "status update error when card added");
+//                                                 .then(subscription => {
+//                                                     console.log(`subscription: ${subscription}`);
+//                                                     User.updateOne({ email: req.body.email },
+//                                                         {
+//                                                             $set: {
+//                                                                 status: 'trial',
+//                                                                 trialCount: 1,
+//                                                                 cardDetails: card,
+//                                                                 address: req.body.address,
+//                                                                 stripeCustomerId: customer.id,
+//                                                                 subscriptioinId: subscription.id
+//                                                             }
+//                                                         })
+//                                                         .then(result => {
+//                                                             console.log(`User status updated to active: ${result}`);
+//                                                             res.send({
+//                                                                 data: subscription,
+//                                                                 success: true,
+//                                                                 message: "card added and status updated to active"
+//                                                             });
+//                                                         })
+//                                                         .catch(error => {
+//                                                             console.log(error, "status update error when card added");
+//                                                         });
+//                                                 })
+//                                                 .catch(error => {
+//                                                     res.send({
+//                                                         error, 
+//                                                         success: false, 
+//                                                         message: "something is wrong with subscription" 
+//                                                     });
+//                                                 })
+//                                         })
+//                                         .catch(error => {
+//                                             console.log(`error in card adding: ${error}`);
+//                                             res.send({
+//                                                 error: error,
+//                                                 success: false,
+//                                                 message: "error in add card: filed missing or token not generated"
 //                                             });
-//                                     })
-//                                     .catch(error =>{
-//                                         res.send({error, success : false, message : "something is wrong with subscription"});
-//                                     })
+//                                         })
 //                                 })
 //                                 .catch(error => {
-//                                     console.log(`error in card adding: ${error}`);
-//                                     res.send({
-//                                         error: error,
-//                                         success: false,
-//                                         message: "error in add card: filed missing or token not generated"
-//                                     });
-//                                 })
-//                         })
-//                         .catch(error => {
-//                             console.log("error", error);
-//                             res.send({ error: error, success: false, message: "card add error in stripe" });
-//                         });
-//                 }
-//             }
-//         });
+//                                     console.log("error", error);
+//                                     res.send({ error: error, success: false, message: "card add error in stripe" });
+//                                 });
+//                         }
+//                     }
+//                 });
+//             })
+//             .catch(error => {
+//                 res.send({ error, success: false, message: error.raw.decline_code});
+//             })
 //     }
 //     catch (error) {
 //         res.send({ error: error, success: false, message: "Something went wrong in card add" });
@@ -241,3 +131,119 @@ module.exports.addCard = async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+module.exports.addCard = async (req, res) => {
+    try {
+         let cardDetails = {
+            card: {
+                number: req.body.cardNumber,
+                exp_month: req.body.expMonth,
+                exp_year: req.body.expYear,
+                cvc: req.body.cvc
+            }
+        }
+        const customerData = {
+			                    name: req.body.name,
+			                    email: req.body.email,
+			                    address: req.body.address
+                			}
+
+         stripe.customers.create(customerData)
+         .then(customer =>{
+         	stripe.tokens.create(cardDetails)
+         	.then(token =>{
+         		stripe.customers.createSource(customer.id, {source : token.id})
+         		.then(source =>{
+                     console.log("source: ", source, customer.id);
+         				stripe.charge.create({
+                                        amount: 1999,
+                                        currency: 'usd',
+                                        source: source.id,
+                                        description: "Trying to validate a card",
+                                        capture: false,
+                                        customer: customer.id
+                                    })
+                                    .then(charge => {
+                                        console.log("charge: ",charge);
+                                        let card = {
+                                            cardId: source.id,
+                                            number: req.body.cardNumber,
+                                            expMonth: req.body.expMonth,
+                                            expYear: req.body.expYear,
+                                        }
+                                        stripe.subscriptions.create({
+                                            customer: customer.id,
+                                            items: [
+                                                {
+                                                    price: 'price_1HtCMdHzA0lAtLhAMLfoUVSa',
+                                                },
+                                            ],
+                                            trial_period_days: 3
+                                        })
+                                            .then(subscription => {
+                                                User.updateOne({ email: req.body.email },
+                                                    {
+                                                        $set: {
+                                                            status: 'trial',
+                                                            trialCount: 1,
+                                                            cardDetails: card,
+                                                            address: req.body.address,
+                                                            stripeCustomerId: customer.id,
+                                                            subscriptioinId: subscription.id
+                                                        }
+                                                    }
+                                                )
+                                                    .then(doc => {
+                                                        console.log("document: ", doc);
+                                                        res.send({
+                                                            data: subscription,
+                                                            success: false,
+                                                            message: "card added and status updated to trial"
+                                                        });
+                                                    })
+                                                    .catch(error => {
+                                                        res.send({
+                                                            error,
+                                                            success: false,
+                                                            message: "DB error for status update when card added"
+                                                        });
+                                                    })
+                                            })
+                                            .catch(error => {
+                                                res.send({ 
+                                                    error, 
+                                                    success: false, 
+                                                    message: "Stripe subscription error" 
+                                                });
+                                            })
+                                    })
+                                    .catch(error => {
+                                        res.send({ error, success: false, message: "card validation failed" });
+                                    })
+         		})
+         		.catch(error =>{
+         			res.send({error, success : false, message : "stripe customer create source error"});
+         		})
+         	})
+         	.catch(error =>{
+         		res.send({error, success : false, messages : "stripe token generation error"});
+         	})
+         })
+         .catch(error =>{
+         	res.send({error, success : false, message : "stripe customer create error"});
+         })
+    }
+    catch (error) {
+        res.send({ error: error, success: false, message: "Something went wrong in card add" });
+    }
+}
