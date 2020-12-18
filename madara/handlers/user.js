@@ -67,7 +67,43 @@ module.exports.login = function (req, res) {
         userDetails,
         token
       }
-      return res.send({ data: data,success : true, message: "User login success" }).status(200);
+      let customerId = userDetails.stripeCustomerId;
+      stripe.invoices.list({
+        customer: customerId,
+        limit: 3
+      })
+      .then(invoices =>{
+        // console.log("invoices: ", invoices);
+        stripe.invoices.retrieve(
+          invoices.data[0].id
+        )
+        .then(invoiceItem => {
+          let end_date = new Date(invoiceItem.lines.data[0].period.end * 1000).toUTCString();
+          stripe.products.retrieve(invoices.data[0].lines.data[0].price.product)
+            .then(product => {
+              let invoiceData = {
+                amount_paid: invoiceItem.amount_paid,
+                exp_date: end_date,
+                plan_name: product.name
+              }
+              res.send({ 
+                data,
+                membership : invoiceData,
+                success: true, 
+                message: 'User login success' 
+              });
+            })
+            .catch(error =>{
+              res.send({error, success : false, message : "product details fetch error"});
+            });
+        })
+        .catch(error =>{
+          res.send({error, success : false, message : "invoice item fetch error"});
+        });
+      })
+      .catch(error =>{
+        res.send({error, success : false, message : "Stripe invoice fetch error"});
+      })
     })
   }
   catch (error) {
@@ -111,7 +147,8 @@ module.exports.createUser = async function (req, res) {
             medicinestatus: req.body.medicinestatus,
             ready: req.body.ready,
             deleted: req.body.deleted,
-            fcmToken : req.body.fcmToken
+            fcmToken : req.body.fcmToken,
+            nickName : req.body.nickName
           });
           user.save((error, response) => {
             if (error) {
@@ -262,7 +299,7 @@ module.exports.resetPassword = (req, res) => {
 module.exports.getUserById = (req, res) => {
   try {
     let {userId}  = jwt.decode(req.params.token);
-    console.log(`userid`, userId);
+    // console.log(`userid`, userId);
     CounselorToUser.findOne({ userId: userId })
     .then(doc =>{
       User.findById(userId, (error, user) => {
@@ -274,7 +311,44 @@ module.exports.getUserById = (req, res) => {
         }
   
         else {
-          res.send({ data: user, success: true, message: 'User fetched for my profile section' });
+          let customerId = user.stripeCustomerId;
+          // console.log("customerId: ", customerId);
+          stripe.invoices.list({
+            customer: customerId,
+            limit: 3
+          })
+          .then(invoices =>{
+            // console.log("invoices: ", invoices);
+            stripe.invoices.retrieve(
+              invoices.data[0].id
+            )
+            .then(invoiceItem => {
+              let end_date = new Date(invoiceItem.lines.data[0].period.end * 1000).toUTCString();
+              stripe.products.retrieve(invoices.data[0].lines.data[0].price.product)
+                .then(product => {
+                  let invoiceData = {
+                    amount_paid: invoiceItem.amount_paid,
+                    exp_date: end_date,
+                    plan_name: product.name
+                  }
+                  res.send({ 
+                    data: user,
+                    membership : invoiceData,
+                    success: true, 
+                    message: 'User fetched for my profile section' 
+                  });
+                })
+                .catch(error =>{
+                  res.send({error, success : false, message : "product details fetch error"});
+                });
+            })
+            .catch(error =>{
+              res.send({error, success : false, message : "invoice item fetch error"});
+            });
+          })
+          .catch(error =>{
+            res.send({error, success : false, message : "Stripe invoice fetch error"});
+          })
         }
       })
     })
@@ -323,7 +397,7 @@ module.exports.profilePictureUpload = (req, res) => {
       try {
         let {userId} = jwt.decode(req.params.token);
         User.findByIdAndUpdate({_id : userId},
-          [{$set : {profilePhoto : req.file.path}}],{upsert : true})
+          [{$set : {profilePhoto : req.file.path}}],{upsert : true, new : true})
           .then((result, error) =>{
             if(error){
               res.send({data : {}, error, success : false, message : "error in file upload"});
@@ -339,6 +413,29 @@ module.exports.profilePictureUpload = (req, res) => {
     }
   });
 }
+
+
+
+
+module.exports.updateNickName = (req, res) => {
+      try {
+        let {userId} = jwt.decode(req.params.token);
+        User.findByIdAndUpdate({_id : userId},
+          [{$set : {nickName : req.body.nickName}}],{upsert : true, new : true})
+          .then((result, error) =>{
+            if(error){
+              res.send({data : {}, error, success : false, message : "DB erro in nick name update"});
+            }
+            res.send({data : result, message: "nick name uodated", success: true }).status(201);
+          })
+          .catch(error => res.send({error, message: "DB error in nick name update", success: false }).status(201));
+      }
+      catch (error) {
+        res.send({ data : {}, success : false, error, message : " invalid request" }).status(203);
+      }
+}
+
+
 
 
 // get all questions
@@ -412,14 +509,15 @@ module.exports.viewSinglePlan = async (req, res) => {
 
 
 
-module.exports.getInvoices = async (req, res) => {
+module.exports.getCurrentMembership = async (req, res) => {
   try {
     let customerId = req.body.customerId;
+    console.log(customerId);
     await stripe.invoices.list({
-      customer: customerId,
-      limit: 3
+      customer: customerId
     })
       .then(invoices => {
+        console.log("inovices: ",inovices);
         stripe.invoices.retrieve(
           invoices.data[0].id
         )
@@ -487,23 +585,22 @@ module.exports.updatePlan = (req, res) =>{
 }
 
 
-module.exports.cancelTrial = (req, res) => {
-  User.findOne({ stripeCustomerId: req.params.stripeCustomerId })
+module.exports.cancelSubscription = (req, res) => {
+  User.findOne({ stripeCustomerId: req.body.stripeCustomerId })
     .then(result => {
       console.log(result);
-      stripe.subscriptions.update(result.subscriptionId, {
-        trial_end: 'now',
-      })
+      stripe.subscriptions.del(result.subscriptionId)
         .then(response => {
+          res.send({response, success : true, message: "subscription canceled"});
           console.log("response: ", response);
         })
         .catch(error => {
           console.log(error, "error");
-          res.send({ error: error, success: false, message: "trial cancelation error" });
+          res.send({ error: error, success: false, message: "subscription cancelation error" });
         });
     })
     .catch(error => {
-      res.send({ error: error, success: false, message: "trial cancelation error" });
+      res.send({ error: error, success: false, message: "subscription cancelation error" });
     })
 }
 
@@ -531,28 +628,30 @@ module.exports.updateCard = async (req, res) => {
             req.body.stripeCustomerId,
             card.id
           )
-          User.updateOne({ stripeCustomerId: req.params.stripeCustomerId },
-            { $set: { cardDetails: cardDetails } })
+          User.updateOne({ stripeCustomerId: req.body.stripeCustomerId },
+            { $set: { cardDetails: cardDetails }},{upsert : true, new : true})
             .then(result => {
               console.log("result", result);
+              res.send({ data: result, success: true, message: "card details updated" });
             })
             .catch(error => {
               console.log("error", error);
+              res.send({error, success : false, message : "DB error in Card update"});
             });
-          res.send({ data: card, success: true, message: "card details updated" });
+          
         })
         .catch(error => {
-          res.send({ error: error, success: false, message: "card update error" });
+          res.send({ 
+            error: error, 
+            success: false, 
+            message: "card update error: there might no user exist with this stripe customer id " 
+          });
         });
     })
     .catch(error => {
       res.send({ error: error, success: false, message: error.raw.message });
     })
 }
-
-
-
-
 
 
 

@@ -53,7 +53,7 @@ const userSchema = new Schema({
 
    forgotPasswordToken : {type : String},
 
-   cardDetails : { type :Array },
+   cardDetails : { type :Object },
 
    address : { type : Object},
 
@@ -63,7 +63,9 @@ const userSchema = new Schema({
 
    trialCount : {type : Number, default : 0},
 
-   fcmToken : { type : String}
+   fcmToken : { type : String},
+
+   nickName : {type : String}
 
 } , {timestamps :true});
 

@@ -18,7 +18,7 @@ const counselorSchema = new Schema({
 
     role : {type : String, default: 'counselor'},
 
-    status : {type : String},
+    status : {type : String, default : 'inactive'},
 
     deleted : {type : Boolean},
 

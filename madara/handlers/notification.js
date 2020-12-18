@@ -1,16 +1,21 @@
 // required module
 const {RtcTokenBuilder, RtcRole}  = require('agora-access-token');
 const apn = require('apn');
-const FCM = require('fcm-node');
-const serverkey = require('../../privateKey.json');
-const fcm = new FCM(serverkey);
+// const fcm = new FCM(serverkey);
+// const FCM = require('fcm-node');
 const jwt = require('jsonwebtoken');
+
+const admin = require('firebase-admin');
+// const serverkey = require('../../privateKey.json');
 
 // required model
 const Counselor = require('../models/counselorModel');
 const User = require('../models/userModel');
 
 
+// const firebaseApp = admin.initializeApp({
+//     credential : admin.credential.cert(serverkey)
+// });
 
 // Agora token generation function
 
@@ -52,7 +57,7 @@ module.exports.generateAgoraToken = async (req, res) => {
             if (receiverRole === 'counselor') {
                 await Counselor.findById(receiverId)
                     .then(doc => {
-                        console.log("counselor fcm token: ", doc.fcmToken);
+                        // console.log("counselor fcm token: ", doc.fcmToken);
                         fcmToken = doc.fcmToken;
                     })
                     .catch(error => {
@@ -68,39 +73,86 @@ module.exports.generateAgoraToken = async (req, res) => {
 
             else {
                 // console.log("key: ", key);
-                let message = {
-                    "to": fcmToken,
+                // let message = {
+                //     "to": fcmToken,
 
-                    "data": {
-                        "token": key,
-                        "typeOfCall": typeOfCall,
-                        "channel": channel,
-                        "senderId": senderId,
-                        "receiverId": receiverId,
-                        "agoraAppId": appId
+                //     "data": {
+                //         "token": key,
+                //         "typeOfCall": typeOfCall,
+                //         "channel": channel,
+                //         "senderId": senderId,
+                //         "receiverId": receiverId,
+                //         "agoraAppId": appId
+                //     },
+                //     "android":{
+                //         "priority":"normal"
+                //       }
+                // }
+
+                // fcm.send(message, (error, response) => {
+                //     if (error) {
+                //         console.log("error: ", error);
+                //         return res.send({ error: error, success: false, message: "something went wrong in sending message" });
+                //     }
+                //     else {
+                        // let data = {
+                        //     token: key,
+                        //     typeOfCall,
+                        //     channel,
+                        //     senderId,
+                        //     receiverId,
+                        //     agoraAppId: appId
+                        // }
+                //         res.send({ data, success: true, message: "Token generation success" });
+                //         console.log("response: ", response);
+                //         // res.send({ response, success: true, message: "succesfully send message and response" });
+                //     }
+                // })
+
+                const notification_options = {
+                    priority: "high",
+                    timeToLive: 60 * 60 * 24
+                  };
+
+
+                const message = {
+                    data: {
+                        token: key,
+                        typeOfCall,
+                        channel,
+                        senderId,
+                        receiverId,
+                        agoraAppId: appId
                     },
+                    // android: {
+                    //     priority: "high"
+                    // },
+                    // priority : '10',
+                    // apns: {
+                    //     headers: {
+                    //         "apns-priority": "10"
+                    //     }
+                    // },
+                    // token: fcmToken
                 }
-
-                fcm.send(message, (error, response) => {
-                    if (error) {
-                        console.log("error: ", error);
-                        return res.send({ error: error, success: false, message: "something went wrong in sending message" });
+                console.log("messageing: ", message);
+                admin.messaging().sendToDevice(fcmToken, message, notification_options)
+                .then(response =>{
+                    console.log("successfully send message: ", response);
+                    let data = {
+                        token: key,
+                        typeOfCall,
+                        channel,
+                        senderId,
+                        receiverId,
+                        agoraAppId: appId
                     }
-                    else {
-                        let data = {
-                            token: key,
-                            typeOfCall,
-                            channel,
-                            senderId,
-                            receiverId,
-                            agoraAppId: appId
-                        }
-                        res.send({ data, success: true, message: "Token generation success" });
-                        console.log("response: ", response);
-                        // res.send({ response, success: true, message: "succesfully send message and response" });
-                    }
+                    res.send({data, success : true, message : "message send successfully"});
                 })
-
+                .catch(error =>{
+                    console.log("error in sending push message: ",error);
+                    res.send({error, success : false, message : "push send failed"});
+                })
             }
         }
     }
