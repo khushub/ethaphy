@@ -24,16 +24,21 @@ router.post('/viewAllPlan', userHandler.viewAllPlan);
 
 router.post('/viewSinglePlan', userHandler.viewSinglePlan);
 
-router.post('/cancelSubscription/:token', userHandler.cancelSubscription);
+router.post('/cancelSubscription', userHandler.cancelSubscription);
 
 router.post('/cardUpdate', userHandler.updateCard);
 
 router.post('/updatePlan/:token', userHandler.updatePlan);
 
-router.post('/addCard', stripeHandler.addCard);
+router.post('/addCard/:token', stripeHandler.addCard);
 
-router.post('/currentMembership/', userHandler.getCurrentMembership);
+router.post('/currentMembership/:token', userHandler.getCurrentMembership);
 
+// Scheduling related routes
+
+router.post('/getEnableSlots', userHandler.getEnableSlots);
+
+router.post('/bookSlots', userHandler.bookSlots);
 
 
 module.exports = router;

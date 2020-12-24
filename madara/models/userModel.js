@@ -59,7 +59,7 @@ const userSchema = new Schema({
 
    stripeCustomerId : {type : String},
 
-   subscriptioinId : { type : String },
+   subscriptionId : { type : String },
 
    trialCount : {type : Number, default : 0},
 

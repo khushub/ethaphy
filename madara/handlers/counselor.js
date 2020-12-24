@@ -240,6 +240,7 @@ module.exports.addTimeSlot = (req, res) => {
       const slotDB = new Slot({
         counselorId: userId,
         day: day,
+        date : req.body.date,
         slot: timeSlot.map((time, index, array) => {
           if (array[index + 1] !== undefined) return { status: 0, time: time + "-" + array[index + 1] };
         })

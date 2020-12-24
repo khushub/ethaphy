@@ -13,6 +13,8 @@ const Question = require('../models/questionModel');
 // const StripeModel = require('../models/stripeModel');
 const OTP = require('../models/otpModel');
 const CounselorToUser = require('../models/counselorToUser');
+// const Counselor = require('../models/counselorModel');
+const Slots = require('../models/slotModel');
 // const 
 
 
@@ -22,10 +24,11 @@ const myEnv = require('dotenv').config();
 const secretKey = myEnv.parsed.STRIPE_KEY;
 
 const Stripe = require('stripe');
+const counselorModel = require('../models/counselorModel');
 const stripe = Stripe(secretKey);
 
 
-module.exports.login = function (req, res) {
+module.exports.login = async function (req, res) {
   try {
     const { username, password } = req.body;
     console.log(req.body);
@@ -43,8 +46,7 @@ module.exports.login = function (req, res) {
       });
     };
 
-
-    User.findOne({ username: req.body.username }, function (err, userDetails) {
+    await User.findOne({ username: req.body.username }, async function (err, userDetails) {
       if (err) {
         logger.error('login: DBError in finding user details.');
         return;
@@ -58,15 +60,23 @@ module.exports.login = function (req, res) {
       if (!Helper.comparePassword(userDetails.password, password)) {
         return res.send({data : {}, error: "Invalid Password" , success : false}).status(403);
       };
-
+      let date = new Date().toISOString().substring(0,10);
+      // let date = new Date("2020-12-29").toISOString().substring(0,10);
+      let slotData = {};
+      CounselorToUser.find({userId : userDetails._id ,date : { $gt : date}})
+      .then(doc =>{
+        slotData.date = doc[0].date;
+        slotData.slots = doc[0].slots;
+        console.log(slotData);
+      })
+      .catch(error =>{
+        return slotData = {};
+      });
+      // console.log("slotData: ", slotData, userDetails._id);
       logger.info('login: ' + userDetails.username + ' logged in.');
       userDetails.fcmToken = req.body.fcmToken;
-      userDetails.save().then(doc => console.log("doument: ", doc));
+      userDetails.save().then(doc => console.log("doument saved"));
       const token = Helper.generateToken(userDetails._id);
-      const data = {
-        userDetails,
-        token
-      }
       let customerId = userDetails.stripeCustomerId;
       stripe.invoices.list({
         customer: customerId,
@@ -81,14 +91,19 @@ module.exports.login = function (req, res) {
           let end_date = new Date(invoiceItem.lines.data[0].period.end * 1000).toUTCString();
           stripe.products.retrieve(invoices.data[0].lines.data[0].price.product)
             .then(product => {
-              let invoiceData = {
+              let membership = {
                 amount_paid: invoiceItem.amount_paid,
                 exp_date: end_date,
                 plan_name: product.name
               }
+              const data = {
+                userDetails,
+                token,
+                membership,
+                slotData
+              }
               res.send({ 
                 data,
-                membership : invoiceData,
                 success: true, 
                 message: 'User login success' 
               });
@@ -552,31 +567,68 @@ module.exports.updatePlan = (req, res) =>{
     let {userId} = jwt.decode(req.params.token);
     User.findById(userId)
     .then(doc =>{
-      stripe.subscriptions.update(
-        doc.subscriptionId,
-        {
-          cancel_at_period_end: false,
-          items: [{
-            price: req.body.priceId
-          }],
-          trial_end : now,
-          billing_cycle_anchor: 'now',
-          payment_behavior: 'pending_if_incomplete'
-        }
-      ).then(subscription => {
-        User.findOneAndUpdate({ _id: userId },
-          { $set: { subscriptionId: subscription.id } })
-          .then(doc => {
-            console.log(`doc: ${doc}`);
-            res.send({ data: subscription, success: true, message: "subscription update success" });
-          })
-          .catch(error => {
-            res.send({ error: error, success: false, message: "DB update error"});
+      if (doc.subscriptionId !== null) {
+        stripe.subscriptions.update(
+          doc.subscriptionId,
+          {
+            cancel_at_period_end: false,
+            items: [{
+              price: req.body.priceId
+            }],
+            trial_end: 'now',
+            billing_cycle_anchor: 'now'
+          }
+        ).then(subscription => {
+          User.findOneAndUpdate({ _id: userId },
+            { $set: { subscriptionId: subscription.id } })
+            .then(doc => {
+              console.log(`doc: ${doc}`);
+              res.send({ data: subscription, success: true, message: "subscription update success" });
+            })
+            .catch(error => {
+              res.send({ error: error, success: false, message: "DB update error"});
+            });
+        })
+        .catch(error =>{
+          res.send({
+            error : error, 
+            success : false, 
+            message : "subscription update error: if subscription exists"
           });
-      })
-      .catch(error =>{
-        res.send({error : error, success : false, message : "subscription update error"});
-      })
+        })
+      }
+      else {
+        console.log('in else:');
+        stripe.subscriptions.create({
+          customer: doc.stripeCustomerId,
+          items: [
+            { price : req.body.priceId },
+          ],
+          trial_end : 'now'
+        })
+        .then(subscription => {
+          console.log("subscription: ",subscription);
+          User.findOneAndUpdate({ _id: userId },
+            { $set: { subscriptionId: subscription.id , status : 'active'} })
+            .then(doc => {
+              console.log("doc: ", doc);
+              res.send({ data: subscription, success: true, message: "subscription update success" });
+            })
+            .catch(error => {
+              res.send({ error: error, success: false, message: "DB subscription id update error"});
+            });
+        })
+        .catch(error =>{
+          res.send({
+            error : error, 
+            success : false, 
+            message : "subscription update error: after cancelation"
+          });
+        })
+      }
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : 'DB error in user find'});
     }) 
   }
    catch (error) {
@@ -585,22 +637,37 @@ module.exports.updatePlan = (req, res) =>{
 }
 
 
+
+
 module.exports.cancelSubscription = (req, res) => {
   User.findOne({ stripeCustomerId: req.body.stripeCustomerId })
     .then(result => {
       console.log(result);
       stripe.subscriptions.del(result.subscriptionId)
         .then(response => {
-          res.send({response, success : true, message: "subscription canceled"});
-          console.log("response: ", response);
+          result.status  = 'inactive';
+          result.subscriptionId = null;  
+          result.save()
+          .then(doc=>{
+            res.send({response, success : true, message: "subscription canceled"});
+            console.log("response: ", response);
+          })
+          .catch(error =>{
+            res.send({error, success : false, message : "DB error in user status update"});
+          });
+          
         })
         .catch(error => {
           console.log(error, "error");
-          res.send({ error: error, success: false, message: "subscription cancelation error" });
+          res.send({ 
+            error: error, 
+            success: false, 
+            message: error.raw.message 
+          });
         });
     })
     .catch(error => {
-      res.send({ error: error, success: false, message: "subscription cancelation error" });
+      res.send({ error: error, success: false, message: "Something goes wrong in subscription cancelation"});
     })
 }
 
@@ -654,8 +721,105 @@ module.exports.updateCard = async (req, res) => {
 }
 
 
+// user will book slots 
+
+module.exports.bookSlots = (req, res) => {
+  try {
+    let { userId } = jwt.decode(req.body.params);
+    if (!req.body.stripeCustomerId) {
+      stripe.customers.create({
+        email: req.body.email,
+        name: req.body.username,
+        description: 'one time payment',
+        address : req.body.address
+      })
+        .then(customer => {
+          stripe.tokens.create({
+            card: {
+              number: req.body.cardNumber,
+              exp_month: req.body.expMonth,
+              exp_year: req.body.expYear,
+              cvc: req.body.cvc,
+            },
+          })
+            .then(token => {
+              stripe.charges.create({
+                amount: 2000,
+                currency: 'usd',
+                source: token,
+                customer: customer.id,
+                description: 'My First Test Charge (created for API docs)',
+              });
+            })
+              .then(charge =>{
+                const slotData = new CounselorToUser({
+                  counselorId: req.body.counselorId,
+                  userId: userId,
+                  slots: req.body.slot,
+                  date: req.body.date
+                });
+                console.log(slotData);
+                slotData.save()
+                  .then(document => {
+                    res.send({ document, success: true, message: "slot book success" });
+                  })
+                  .catch(error => {
+                    res.send({ error, success: false, message: "DB error in slot data save" });
+                  })
+              })
+            .catch(error =>{
+              res.send({error, success : false, message : "stripe card token create error"});
+            })
+        })
+        .catch(error => {
+          res.send({ error, success: false, message: "stripe error" });
+        })
+    }
+    else {
+      
+    }
+    const slotData = new CounselorToUser({
+      counselorId: req.body.counselorId,
+      userId: req.body.userId,
+      slots: req.body.slot,
+      date: req.body.date
+    });
+    console.log(slotData);
+    slotData.save()
+      .then(document => {
+        res.send({ document, success: true, message: "slot book success" });
+      })
+      .catch(error => {
+        res.send({ error, success: false, message: "DB error in slot data save" });
+      })
+  }
+  catch (error) {
+    res.send({ error, success: false, message: " Something went wrong in book slot data save" });
+  }
+}
 
 
+
+// user will get enable slots of a counselor
+module.exports.getEnableSlots = async (req, res) =>{
+  try {
+    let counselorId = req.body.counselorId;
+    let slots = await Slots.find({counselorId : counselorId, date : req.body.date});
+    let enableSlots = [];
+    if(slots[0].status === 'active'){
+      for(let i=0, j=0; i < slots[0].slot.length; i++){
+        if(slots[0].slot[i].status === 0){
+          enableSlots[j] = slots[0].slot[i].time;
+          j++;
+        }
+      }  
+    }
+    res.send({data: enableSlots, success : true, message : "data fetched"});
+  }
+   catch (error) {
+    res.send({data : [],success : false, message: "data fetch error", error});
+  }
+}
 
 
 
@@ -711,7 +875,7 @@ module.exports.updateCard = async (req, res) => {
 //                 res.send({ data: subscription, success: true, message: "subscription update success" });
 //               })
 //               .catch(error => {
-//                 res.send({ error: error, success: false, message: "update subscriptioin errro for data save in db" });
+//                 res.send({ error: error, success: false, message: "update subscription errro for data save in db" });
 //               });
 //           })
 //           .catch(error =>{

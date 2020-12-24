@@ -4,7 +4,11 @@ const Schema = mongoose.Schema;
 const counselorToUser = new Schema({
     counselorId : { type : String},
 
-    userId : { type : String}
+    userId : { type : String},
+
+    slots : {type : Array},
+
+    date : {type : String}
 });
 
 module.exports = mongoose.model('CounselorToUser', counselorToUser);

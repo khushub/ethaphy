@@ -37,7 +37,8 @@ module.exports.generateAgoraToken = async (req, res) => {
         let senderId = req.body.senderId;
         let receiverRole = req.body.receiverRole;
         let fcmToken;
-
+        let senderName;
+        let receiverName;
         if (!channel || !receiverId || !receiverRole) {
             return res.send({ error: 'field is missing, either channel/receiverId/receiverRole' });
         }
@@ -47,11 +48,19 @@ module.exports.generateAgoraToken = async (req, res) => {
                 await User.findById(receiverId)
                     .then(doc => {
                         fcmToken = doc.fcmToken;
+                        receiverName = doc.nickName
                         console.log("user fcm token: ", fcmToken);
                     })
                     .catch(error => {
                         return res.send({ error, success: false, message: "DB fetch error for user device token" });
                     });
+                    await Counselor.findById(senderId)
+                    .then(doc=>{
+                        senderName = doc.userName
+                    })
+                    .catch(error =>{
+                        res.send({error, success : false, message : "DB error in search of counselor name"});
+                    })
             }
 
             if (receiverRole === 'counselor') {
@@ -59,10 +68,18 @@ module.exports.generateAgoraToken = async (req, res) => {
                     .then(doc => {
                         // console.log("counselor fcm token: ", doc.fcmToken);
                         fcmToken = doc.fcmToken;
+                        receiverName = doc.userName
                     })
                     .catch(error => {
                         res.send({ error, success: false, message: "DB fetch error for counselor device token" });
                     })
+                await User.findById(senderId)
+                .then(doc =>{
+                    senderName = doc.nickName;
+                })
+                .catch(error =>{
+                    res.send({error, success : false, message : "DB error in search of user name"});
+                })    
             }
 
             const key = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, channel, userId, role, privilegeExpiredTs);
@@ -72,43 +89,6 @@ module.exports.generateAgoraToken = async (req, res) => {
             }
 
             else {
-                // console.log("key: ", key);
-                // let message = {
-                //     "to": fcmToken,
-
-                //     "data": {
-                //         "token": key,
-                //         "typeOfCall": typeOfCall,
-                //         "channel": channel,
-                //         "senderId": senderId,
-                //         "receiverId": receiverId,
-                //         "agoraAppId": appId
-                //     },
-                //     "android":{
-                //         "priority":"normal"
-                //       }
-                // }
-
-                // fcm.send(message, (error, response) => {
-                //     if (error) {
-                //         console.log("error: ", error);
-                //         return res.send({ error: error, success: false, message: "something went wrong in sending message" });
-                //     }
-                //     else {
-                        // let data = {
-                        //     token: key,
-                        //     typeOfCall,
-                        //     channel,
-                        //     senderId,
-                        //     receiverId,
-                        //     agoraAppId: appId
-                        // }
-                //         res.send({ data, success: true, message: "Token generation success" });
-                //         console.log("response: ", response);
-                //         // res.send({ response, success: true, message: "succesfully send message and response" });
-                //     }
-                // })
-
                 const notification_options = {
                     priority: "high",
                     timeToLive: 60 * 60 * 24
@@ -122,18 +102,10 @@ module.exports.generateAgoraToken = async (req, res) => {
                         channel,
                         senderId,
                         receiverId,
-                        agoraAppId: appId
-                    },
-                    // android: {
-                    //     priority: "high"
-                    // },
-                    // priority : '10',
-                    // apns: {
-                    //     headers: {
-                    //         "apns-priority": "10"
-                    //     }
-                    // },
-                    // token: fcmToken
+                        agoraAppId: appId,
+                        senderName,
+                        receiverName
+                    }
                 }
                 console.log("messageing: ", message);
                 admin.messaging().sendToDevice(fcmToken, message, notification_options)
@@ -145,7 +117,9 @@ module.exports.generateAgoraToken = async (req, res) => {
                         channel,
                         senderId,
                         receiverId,
-                        agoraAppId: appId
+                        agoraAppId: appId,
+                        senderName,
+                        receiverName
                     }
                     res.send({data, success : true, message : "message send successfully"});
                 })

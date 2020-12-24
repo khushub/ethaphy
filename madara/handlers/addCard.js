@@ -2,6 +2,7 @@
 
 const myEnv = require('dotenv').config();
 const secretKey = myEnv.parsed.STRIPE_KEY;
+const jwt = require('jsonwebtoken');
 
 const Stripe = require('stripe');
 const stripe = Stripe(secretKey);
@@ -181,17 +182,19 @@ module.exports.addCard = async (req, res) => {
                                             expMonth: req.body.expMonth,
                                             expYear: req.body.expYear,
                                         }
+                                       let priceId = req.body.priceId ? req.body.priceId : 'price_1HtCMdHzA0lAtLhAMLfoUVSa'
                                         stripe.subscriptions.create({
                                             customer: customer.id,
                                             items: [
                                                 {
-                                                    price: 'price_1HtCMdHzA0lAtLhAMLfoUVSa',
+                                                    price: priceId
                                                 },
                                             ],
                                             trial_period_days: 3
                                         })
                                             .then(subscription => {
-                                                User.updateOne({ email: req.body.email },
+                                                let {userId} = jwt.decode(req.params.token)
+                                                User.updateOne({ _id: userId},
                                                     {
                                                         $set: {
                                                             status: 'trial',
@@ -199,7 +202,7 @@ module.exports.addCard = async (req, res) => {
                                                             cardDetails: card,
                                                             address: req.body.address,
                                                             stripeCustomerId: customer.id,
-                                                            subscriptioinId: subscription.id
+                                                            subscriptionId: subscription.id
                                                         }
                                                     }
                                                 )
