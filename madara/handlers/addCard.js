@@ -154,7 +154,7 @@ module.exports.addCard = async (req, res) => {
             }
         }
         const customerData = {
-			                    name: req.body.name,
+			                    name: req.body.username,
 			                    email: req.body.email,
 			                    address: req.body.address
                 			}

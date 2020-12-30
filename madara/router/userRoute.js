@@ -34,11 +34,13 @@ router.post('/addCard/:token', stripeHandler.addCard);
 
 router.post('/currentMembership/:token', userHandler.getCurrentMembership);
 
+router.post('/pastInvoices',userHandler.getPastInvoices);
+
 // Scheduling related routes
 
 router.post('/getEnableSlots', userHandler.getEnableSlots);
 
-router.post('/bookSlots', userHandler.bookSlots);
+router.post('/bookSlots/:token', userHandler.bookSlots);
 
 
 module.exports = router;

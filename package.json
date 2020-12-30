@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google-cloud/speech": "^4.1.5",
     "agora-access-token": "^2.0.4",
     "apn": "^2.2.0",
     "bcryptjs": "^2.4.3",

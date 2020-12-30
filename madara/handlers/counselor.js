@@ -61,7 +61,7 @@ module.exports.createCounselor = async function (req, res) {
                 email: bodyData.email,
                 mobileNumber: bodyData.mobileNumber,
                 address: bodyData.address,
-                password: Helper.hashPassword(req.body.password),
+                password: Helper.hashPassword(bodyData.password),
                 role: bodyData.role,
                 status: bodyData.status,
                 deleted: bodyData.deleted,

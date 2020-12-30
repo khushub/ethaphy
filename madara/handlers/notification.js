@@ -3,6 +3,8 @@ const {RtcTokenBuilder, RtcRole}  = require('agora-access-token');
 const apn = require('apn');
 // const fcm = new FCM(serverkey);
 // const FCM = require('fcm-node');
+const speech = require('@google-cloud/speech');
+const fs = require('fs');
 const jwt = require('jsonwebtoken');
 
 const admin = require('firebase-admin');
@@ -207,10 +209,12 @@ module.exports.sendAndroidNotification = (req, res) =>{
 }
 
 
-
-// let {userId} = jwt.decode(req.params.token);
-            // console.log("userid", userId);
-            // Counselor.findByIdAndUpdate({_id : userId}, [{$set : {agoraToken : key}}], {new: true})
-            // .then(doc =>{
-            //     console.log("doc",doc);
-            // });
+module.exports.speechToText = (req, res) =>{
+    try {
+        const client = new speech.SpeechClient();
+        const filename = '../uploads'
+    } 
+    catch (error) {
+        
+    }
+}
