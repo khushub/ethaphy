@@ -8,8 +8,136 @@ const Stripe = require('stripe');
 const stripe = Stripe(secretKey);
 
 // Required Model
-
 const User = require('../models/userModel');
+
+
+
+module.exports.addCard = async (req, res) => {
+    try {
+         let cardDetails = {
+            card: {
+                number: req.body.cardNumber,
+                exp_month: req.body.expMonth,
+                exp_year: req.body.expYear,
+                cvc: req.body.cvc
+            }
+        }
+        const customerData = {
+			                    name: req.body.username,
+			                    email: req.body.email,
+			                    address: req.body.address
+                			}
+
+         stripe.customers.create(customerData)
+         .then(customer =>{
+         	stripe.tokens.create(cardDetails)
+         	.then(token =>{
+         		stripe.customers.createSource(customer.id, {source : token.id})
+         		.then(source =>{
+                     console.log("source: ", source, customer.id);
+         				stripe.charges.create({
+                                        amount: 1999,
+                                        currency: 'inr',
+                                        source: source.id,
+                                        description: "Trying to validate a card",
+                                        capture: false,
+                                        customer: customer.id
+                                    })
+                                    .then(charge => {
+                                        console.log("charge: ",charge);
+                                        let card = {
+                                            cardId: source.id,
+                                            number: req.body.cardNumber,
+                                            expMonth: req.body.expMonth,
+                                            expYear: req.body.expYear,
+                                        }
+                                       let priceId = req.body.priceId ? req.body.priceId : 'price_1HtCMdHzA0lAtLhAMLfoUVSa'
+                                        stripe.subscriptions.create({
+                                            customer: customer.id,
+                                            items: [
+                                                {
+                                                    price: priceId
+                                                },
+                                            ],
+                                            trial_period_days: 3
+                                        })
+                                            .then(subscription => {
+                                                let {userId} = jwt.decode(req.params.token)
+                                                User.updateOne({ _id: userId},
+                                                    {
+                                                        $set: {
+                                                            status: 'trial',
+                                                            trialCount: 1,
+                                                            cardDetails: card,
+                                                            address: req.body.address,
+                                                            stripeCustomerId: customer.id,
+                                                            subscriptionId: subscription.id
+                                                        }
+                                                    }
+                                                )
+                                                    .then(doc => {
+                                                        console.log("document: ", doc);
+                                                        res.send({
+                                                            data: subscription,
+                                                            success: false,
+                                                            message: "card added and status updated to trial"
+                                                        });
+                                                    })
+                                                    .catch(error => {
+                                                        res.send({
+                                                            error,
+                                                            success: false,
+                                                            message: "DB error for status update when card added"
+                                                        });
+                                                    })
+                                            })
+                                            .catch(error => {
+                                                res.send({ 
+                                                    error, 
+                                                    success: false, 
+                                                    message: "Stripe subscription error" 
+                                                });
+                                            })
+                                    })
+                                    .catch(error => {
+                                        res.send({ error, success: false, message: "card validation failed" });
+                                    })
+         		})
+         		.catch(error =>{
+         			res.send({error, success : false, message : "stripe customer create source error"});
+         		})
+         	})
+         	.catch(error =>{
+         		res.send({error, success : false, messages : "stripe token generation error"});
+         	})
+         })
+         .catch(error =>{
+         	res.send({error, success : false, message : "stripe customer create error"});
+         })
+    }
+    catch (error) {
+        res.send({ error: error, success: false, message: "Something went wrong in card add" });
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -129,124 +257,3 @@ const User = require('../models/userModel');
 //         res.send({ error: error, success: false, message: "Something went wrong in card add" });
 //     }
 // }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-module.exports.addCard = async (req, res) => {
-    try {
-         let cardDetails = {
-            card: {
-                number: req.body.cardNumber,
-                exp_month: req.body.expMonth,
-                exp_year: req.body.expYear,
-                cvc: req.body.cvc
-            }
-        }
-        const customerData = {
-			                    name: req.body.username,
-			                    email: req.body.email,
-			                    address: req.body.address
-                			}
-
-         stripe.customers.create(customerData)
-         .then(customer =>{
-         	stripe.tokens.create(cardDetails)
-         	.then(token =>{
-         		stripe.customers.createSource(customer.id, {source : token.id})
-         		.then(source =>{
-                     console.log("source: ", source, customer.id);
-         				stripe.charges.create({
-                                        amount: 1999,
-                                        currency: 'inr',
-                                        source: source.id,
-                                        description: "Trying to validate a card",
-                                        capture: false,
-                                        customer: customer.id
-                                    })
-                                    .then(charge => {
-                                        console.log("charge: ",charge);
-                                        let card = {
-                                            cardId: source.id,
-                                            number: req.body.cardNumber,
-                                            expMonth: req.body.expMonth,
-                                            expYear: req.body.expYear,
-                                        }
-                                       let priceId = req.body.priceId ? req.body.priceId : 'price_1HtCMdHzA0lAtLhAMLfoUVSa'
-                                        stripe.subscriptions.create({
-                                            customer: customer.id,
-                                            items: [
-                                                {
-                                                    price: priceId
-                                                },
-                                            ],
-                                            trial_period_days: 3
-                                        })
-                                            .then(subscription => {
-                                                let {userId} = jwt.decode(req.params.token)
-                                                User.updateOne({ _id: userId},
-                                                    {
-                                                        $set: {
-                                                            status: 'trial',
-                                                            trialCount: 1,
-                                                            cardDetails: card,
-                                                            address: req.body.address,
-                                                            stripeCustomerId: customer.id,
-                                                            subscriptionId: subscription.id
-                                                        }
-                                                    }
-                                                )
-                                                    .then(doc => {
-                                                        console.log("document: ", doc);
-                                                        res.send({
-                                                            data: subscription,
-                                                            success: false,
-                                                            message: "card added and status updated to trial"
-                                                        });
-                                                    })
-                                                    .catch(error => {
-                                                        res.send({
-                                                            error,
-                                                            success: false,
-                                                            message: "DB error for status update when card added"
-                                                        });
-                                                    })
-                                            })
-                                            .catch(error => {
-                                                res.send({ 
-                                                    error, 
-                                                    success: false, 
-                                                    message: "Stripe subscription error" 
-                                                });
-                                            })
-                                    })
-                                    .catch(error => {
-                                        res.send({ error, success: false, message: "card validation failed" });
-                                    })
-         		})
-         		.catch(error =>{
-         			res.send({error, success : false, message : "stripe customer create source error"});
-         		})
-         	})
-         	.catch(error =>{
-         		res.send({error, success : false, messages : "stripe token generation error"});
-         	})
-         })
-         .catch(error =>{
-         	res.send({error, success : false, message : "stripe customer create error"});
-         })
-    }
-    catch (error) {
-        res.send({ error: error, success: false, message: "Something went wrong in card add" });
-    }
-}

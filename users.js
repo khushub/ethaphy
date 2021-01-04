@@ -44,6 +44,7 @@ const notificationRoute = require('./madara/router/notificationRoute');
 
 var port = 4003;   // Port used for user server
 var app = express();
+const webhook = require('./madara/handlers/stripeWebhook');
 
 const admin = require("firebase-admin");
 const serviceAccount = require('./privateKey.json');
@@ -53,7 +54,9 @@ app.use(device.capture());
 app.use(cors());
 app.use(express.urlencoded({extended : false}));
 app.use(bodyParser.urlencoded({ extended: true }));
+var dir = path.join(__dirname, 'uploads');
 
+app.use(express.static(dir));
 
 
 
@@ -66,7 +69,7 @@ app.set('port', port);
 
 app.use((req, res, next) => {
 	if (req.originalUrl === '/webhook') {
-		console.log("original url: ", req.originalUrl);
+		// console.log("original url: ", req.originalUrl);
 		next();
 	} else {
 		bodyParser.json()(req, res, next);
@@ -76,76 +79,7 @@ app.use((req, res, next) => {
 
 logger.level = 'error';
 
-app.post('/webhook', bodyParser.raw({ type : 'application/json'}), (req, res) =>{
-	let event;
-	// const sig = req.header['stripe-signature'];
-	try {
-		//JSON.parse(req.body);
-		event = stripe.webhooks.constructEvent(
-			req.body,
-			req.header('stripe-signature'),
-			myEnv.parsed.WEBHOOK_KEY
-		  );
-	} 
-	catch (error) {
-		console.log("req.header(stripe-signature)",req.header('stripe-signature'));
-		console.log("⚠️ Webhook signture verification failed: ",error.message);
-		console.log("check env file and put correct webhook secret");
-		return res.send({error, success : false, message : error.message});
-	}
-
-	// handle the event
-
-	switch(event.type){
-		case 'customer.subscription.trial_will_end' :
-			// send email to user about trial end;
-			let trialEnd = event.data.object;
-			console.log("trial end for the user: ",trialEnd);
-			break;
-		
-		case 'customer.subscription.updated' :
-			// send update to user that their plan has been updated
-			let subscriptionUpdate = event.data.object;
-			console.log("subscription plan has been updated for the user: ", subscriptionUpdate.id);
-			break;
-
-		case 'invoice.paid' :
-			// send update to user about payment success for subscription
-			
-			let invoice = event.data.object;
-			console.log("invoice paid for the customer:", invoice.id);
-			break;
-
-		case 'invoice.payment_failed':
-			// set user status to inactive if payment failed
-			let invoiceFail = event.data.object;
-			console.log("payment failed for the user: ",invoiceFail.id);
-			break;
-
-		case 'invoice.payment_succeeded' :
-			// do some work if payment succeeded
-			let invoiceSucceeded = event.data.object;
-			console.log("payment succeeede for the customer: ",invoiceSucceeded.id);
-			break;
-
-		case 'payment_intent.payment_failed' :
-			// change user status because of payment failed
-			let paymentIntentFailed = event.data.object;
-			console.log("payment failed for user: ",paymentIntentFailed.id);
-			break;
-
-		case 'customer.created' : 
-			// do whatever you want to do when a customer is created
-			let customer = event.data.object;
-			console.log("customer created: ", customer);
-			break;
-
-		default : 
-			console.log("event.type", event.type);
-			console.log(`unknown event type`);
-		
-	}
-})
+app.post('/webhook', bodyParser.raw({ type : 'application/json'}), webhook.stripeWebhook);
 
 app.use('/user', userRoute);
 

@@ -40,81 +40,110 @@ const upload = multer({ storage : storage, fileFilter :fileFilter }).single('pho
 // Counselor Registeration
 
 module.exports.createCounselor = async function (req, res) {
-  const bodyData = req.body;
-  upload(req, res, (err) => {
-    if (err) {
-      console.log(err);
-      res.send({error : err, success : false, message : "file upload error"})
-    }
-    else {
-      try {
-
-        // check if user exist
-         Counselor.findOne({ $and: [{ email: req.body.email, username: req.body.username }] })
-          .then(counselor => {
-            console.log("counselor in then: ", counselor);
-            if (!counselor) {
-              const counselor = new Counselor({
-                firstName: bodyData.firstName,
-                lastName: bodyData.lastName,
-                userName: bodyData.userName,
-                email: bodyData.email,
-                mobileNumber: bodyData.mobileNumber,
-                address: bodyData.address,
-                password: Helper.hashPassword(bodyData.password),
-                role: bodyData.role,
-                status: bodyData.status,
-                deleted: bodyData.deleted,
-                affirmation: bodyData.affirmation,
-                licensingState: bodyData.licensingState,
-                licenseNumber: bodyData.licenseNumber,
-                licenseLink: bodyData.licenseLink,
-                licenseReview: bodyData.licenseReview,
-                serviceProviding: bodyData.serviceProviding,
-                genderApplies: bodyData.genderApplies,
-                languages: bodyData.languages,
-
-                photo : req.file.path,
-
-                designations: bodyData.designations,
-                specialities: bodyData.specialities,
-                aboutMe: bodyData.aboutMe,
-                personalQuote: bodyData.personalQuote,
-                practiceYears: bodyData.practiceYears,
-                attendedSchool: bodyData.attendedSchool,
-                graduatedYear: bodyData.graduatedYear,
-                howYouhearAboutUs: bodyData.howYouhearAboutUs,
-                fcmToken : bodyData.fcmToken 
-              });
-
-              counselor.save((error, response) => {
-                if (error) {
-                  res.send({ data: {}, error: error.message, message: "username or email already taken in save" }).status(500);
-                }
-                else {
-                  const token = Helper.generateregisterationToken(response.id);
-                  let data = {
-                    response,
-                    token
+    upload(req, res, (err) => {
+      if (err) {
+        console.log(err);
+        res.send({error : err, success : false, message : "file upload error"})
+      }
+      else {
+        try {
+          // check if all field is available
+          //   const { username, email, password } = req.body;
+          //   if (!username || !email || !password) {
+          //     return res.send({data : {}, error: "username or email or password is missing", success : false }).status(400);
+          //   }
+  
+          // check if user exist
+           Counselor.findOne({ $and: [{ email: req.body.email, username: req.body.username }] })
+            .then(counselor => {
+              if (!counselor) {
+                const counselor = new Counselor({
+                  firstName: req.body.firstName,
+                  lastName: req.body.lastName,
+                  userName: req.body.userName,
+                  email: req.body.email,
+                  mobileNumber: req.body.mobileNumber,
+                  address: req.body.address,
+                  password: Helper.hashPassword(req.body.password),
+                  role: req.body.role,
+                  status: req.body.status,
+                  deleted: req.body.deleted,
+                  affirmation: req.body.affirmation,
+                  licensingState: req.body.licensingState,
+                  licenseNumber: req.body.licenseNumber,
+                  licenseLink: req.body.licenseLink,
+                  licenseReview: req.body.licenseReview,
+                  serviceProviding: req.body.serviceProviding,
+                  genderApplies: req.body.genderApplies,
+                  languages: req.body.languages,
+  
+                  photo : req.file.path,
+  
+                  designations: req.body.designations,
+                  specialities: req.body.specialities,
+                  aboutMe: req.body.aboutMe,
+                  personalQuote: req.body.personalQuote,
+                  practiceYears: req.body.practiceYears,
+                  attendedSchool: req.body.attendedSchool,
+                  graduatedYear: req.body.graduatedYear,
+                  howYouhearAboutUs: req.body.howYouhearAboutUs,
+                  fcmToken : req.body.fcmToken               
+             });
+                // let mailTransport = nodemailer.createTransport({
+                //   service : 'gmail',
+                //   auth :{
+                //     user : 'edwy23@gmail.com',
+                //     pass : '***********'
+                //   }
+                // });
+  
+                // let mailDetails = {
+                //   from : 'edwy23@gmail.com',
+                //   to : req.body.email,
+                //   subject : 'Registration Success mail',
+                //   text : ' You successfully registered to Etherapthy Pro'
+                // }
+  
+                counselor.save((error, response) => {
+                  if (error) {
+                    res.send({ 
+                      data: {}, 
+                      error: error.message, 
+                      message: "date save error : username or email already taken"
+                     }).status(500);
                   }
-                  res.send({data});
-                }
-              })
-            }
-            else {
-              return res.send({ data: {}, success: false, message: "username or email already taken" }).status(402);
-            }
-          })
-          .catch(error => {
-            res.send({ error: error, message: "required field/s missing" }).status(500);
-          })
+                  else {
+                    const token = Helper.generateregisterationToken(response.id);
+                    let data = {
+                      response,
+                      token
+                    }
+                    // mailTransport.sendMail(mailDetails, (error, response) =>{
+                    //   if(error){
+                    //     res.send({data : {}, success : false, error, message :'Error in mail send in user registration'});
+                    //   }
+                    //   else{
+                    //     res.send({data: data, success: true, message: "Counselor Registered and mail send to registered email"});
+                    //   }
+                    // });
+                    res.send({data});
+                  }
+                })
+              }
+              else {
+                return res.send({ data: {}, success: false, message: "username or email already taken" }).status(402);
+              }
+            })
+            .catch(error => {
+              res.send({ error: error, message: "required field/s missing" }).status(500);
+            })
+        }
+        catch (error) {
+          res.send({ error: error.message, message: "Error while registration" }).status(500);
+        }
       }
-      catch (error) {
-        res.send({ error: error.message, message: "Error while registration" }).status(500);
-      }
-    }
-  })
-}
+    })
+  }
 
 
 // Counselor login
