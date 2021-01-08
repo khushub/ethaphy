@@ -56,6 +56,8 @@ const counselorSchema = new Schema({
 
     howYouhearAboutUs : {type : String, required : true},
 
+    introMessage : {type : String},
+
     fcmToken : { type : String}
 
 }, {timestamps : true});

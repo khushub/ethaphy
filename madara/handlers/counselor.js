@@ -3,12 +3,14 @@ var logger = require('log4js').getLogger();
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
-
+const Chat = require('../models/chatModel');
 
 // required model
 const Counselor = require('../models/counselorModel');
 const Slot = require('../models/slotModel');
 const CounselorToUser = require('../models/counselorToUser');
+const OTP = require('../models/otpModel');
+const userModel = require('../models/userModel');
 
 
 
@@ -219,6 +221,29 @@ module.exports.createCounselor = async function (req, res) {
     }
   }
 
+
+module.exports.introMessage = async (req, res) =>{
+  try {
+    // let id = jwt.decode(req.params.token);
+    let id = req.params.token;
+    Counselor.findOneAndUpdate({_id : id},
+      [{$set : {
+        introMessage : req.body.introMessage
+      }
+    }], {returnNewDocument : true, upsert : true})
+    .then(doc =>{
+      res.send({data : doc, success : true, message : "intro message saved"});
+    })
+    .catch(error =>{
+      res.send({error, success : false , message : "DB error: intro message save"});
+    })
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "unknown error"});
+  }
+}
+
+
 // Adding time slot from counselor end for a week
  
 module.exports.addTimeSlot = (req, res) => {
@@ -369,10 +394,12 @@ module.exports.disableSlotsByDay = (req, res) => {
   }
 }
 
+// accept a user
 
 module.exports.userAssignment = (req, res) =>{
   try {
-      let counselorId = jwt.decode(req.params.token);
+      // let counselorId = jwt.decode(req.params.token);
+      let counselorId = req.params.token;
       let userId = req.body.userId
 
       let assignmentData = new CounselorToUser({
@@ -381,7 +408,20 @@ module.exports.userAssignment = (req, res) =>{
       });
       assignmentData.save()
       .then(doc =>{
-        res.send({doc, success : false, message : "counselor assing to user"});
+        Chat.findOneAndUpdate({ user_id: req.body.userId},
+          {$set : {
+            counsellor_id : counselorId,
+            counsellorname : req.body.counselorName,
+            joinId : req.body.userId + "-" + counselorId
+          }
+        }, {upsert : true, new : true})
+        .then(chat =>{
+          console.log("chat : ", chat);
+          res.send({thread : chat, success : true, message : "counselor assing to user"});
+        })
+        .catch(error =>{
+          res.send({error, success : false , message : "DB error : thread data save error"});
+        }) 
       })
       .catch(error =>{
         res.send({error, success : false, message : "DB error in counselor assingment"});
@@ -395,15 +435,123 @@ module.exports.userAssignment = (req, res) =>{
 
 
 
+module.exports.potential = async (req, res) =>{
+  try {
+    await Chat.find({counsellor_id : "5fc9cb88db493e26f44e9622"})
+    .then(docs =>{
+      // console.log("docs: ", docs.length);
+      let potential = [];
+      for(let i=0; i< docs.length; i++){
+        console.log("docs[i] : ",docs[i]);
+        potential[i] = {
+          userName : docs[i].username,
+          userImage : docs[i].user_image,
+          userId : docs[i].user_id
+ 
+        }
+        console.log("potenrial[i] : ", potential[i]);
+      }
+      res.send({data : potential, success : false , message : "potential fetched"});
+    })
+  } 
+  catch (error) {
+    res.send({error, success : false, message : 'unknown error: might be db error'});
+  }
+}
+
+
+
+
+
+// forgot password functionality
+
+module.exports.forgotPassword = async (req, res) => {
+  try {
+    const email = req.body.email;
+    await Counselor.findOne({ email: email }, async (error, doc) => {
+      if (error || !doc) {
+        res.send({ error: error, success: false, message: 'DB error: no counselor exists' });
+      }
+      else {
+        // console.log("doc: ", doc);
+        let otp = Math.floor(Math.random() * 100000);
+        let mailTransport = await nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: 'rahul.168607@knit.ac.in',
+            pass: '8126123782'
+          }
+        });
+
+        let mailDetails = {
+          from: 'rahul.168607@knit.ac.in',
+          to: email,
+          subject: 'Test mail',
+          text: otp.toString()
+        }
+        console.log(" maildetails: ", mailDetails);
+        await mailTransport.sendMail(mailDetails, async (error, response)=>{
+          if(error || !response){
+            res.send({error : error, success : false, message: "Error in mail send : OTP" });
+          }
+          else{
+            OTP.findOneAndUpdate({email : email}, {email : email, otp : otp}, {upsert : true, new : true})
+            .then(doc =>{
+              res.send({response : response, success : true, message : "OTP sent to your mail"});
+            })
+            .catch(error=>{
+              res.send({error, success : false, message : "DB error in otp data save"});
+            })
+          }
+        })
+      }
+    })
+  }
+  catch (error) {
+    res.send({ error: error.message, message: 'Error at forgot password', success: true });
+  }
+}
 
 
 
 
 
 
+// OTP Verification
 
-
-
+module.exports.verifyOTP = (req, res) =>{
+  try {
+    OTP.findOne({email : req.body.email})
+    .then(doc =>{
+      if(doc.otp === req.body.otp){
+        let password = req.body.password;
+        let confirmPassword = req.body.confirmPassword;
+        if(password === confirmPassword){
+          password = Helper.hashPassword(password);
+          Counselor.findOneAndUpdate({email : req.body.email}, {password : password}, {new : true})
+          .then(user =>{
+            res.send({data : user, success : true, message : "Password update success"});
+          })
+          .catch(error =>{
+            res.send({error, success : false, message : "DB error: password update"});
+          })
+        }
+        else{
+          res.send({data : {},success : false, message : "mismatch password and confirmPassword"});
+        }
+      }
+      else{
+        res.send({success : false, message : "incorrect otp"});
+      }
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "DB error: no user found"});
+    })  
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "unknown error: forgot password"});
+  }
+}
 
 
 

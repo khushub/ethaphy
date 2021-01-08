@@ -5,6 +5,20 @@ const Question = require('../models/questionModel');
 
 router.get('/', userHandler.getQuestions);
 
+router.get('/homeScreenVideos', (req, res) =>{
+  try {
+    const data = {
+      1 : 'https://youtu.be/tyQ1ao5RHuM',
+      2 : 'https://youtu.be/nGvC9bg95OI',
+      3 : 'https://youtu.be/YHucPsVfzo8'
+    }
+    res.send({data, success : true})  
+  } 
+  catch (error) {
+    res.send({error, success : false});
+  }
+})
+
 router.post('/postQuestion', (req, res) =>{
     try {
         const questions = new Question({
@@ -27,5 +41,6 @@ router.post('/postQuestion', (req, res) =>{
       res.send({error : error, message : "DB error"})  ;
     }
 });
+
 
 module.exports = router;

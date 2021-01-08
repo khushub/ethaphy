@@ -13,7 +13,7 @@ const Question = require('../models/questionModel');
 // const StripeModel = require('../models/stripeModel');
 const OTP = require('../models/otpModel');
 const CounselorToUser = require('../models/counselorToUser');
-// const Counselor = require('../models/counselorModel');
+const Counselor = require('../models/counselorModel');
 const Slots = require('../models/slotModel');
 const Chat = require('../models/chatModel');
 
@@ -64,8 +64,8 @@ module.exports.login = async function (req, res) {
       let date = new Date().toISOString().substring(0, 10);
       // let date = new Date("2020-12-29").toISOString().substring(0,10);
       let slotData = {};
-      CounselorToUser.find({ userId: userDetails._id, date: { $gt: date } })
-        .then(doc => {
+      await CounselorToUser.find({ userId: userDetails._id, date: { $gt: date } })
+        .then((doc) => {
           slotData.date = doc[0].date;
           slotData.slots = doc[0].slots;
           console.log(slotData);
@@ -82,72 +82,84 @@ module.exports.login = async function (req, res) {
       // Chat related data
       let thread = {};
       await Chat.findOne({ user_id: userDetails._id })
-        .then(data => {
-          thread.counselorId = data.counsellor_id;
-          thread.joinId = data.joinId;
-          thread.counsellorname = data.counsellorname;
-          console.log(thread.counselorId);
+        .then(async (data) => {
+          await Counselor.findById(data.counsellor_id)
+            .then(result => {
+              thread.counselorId = data.counsellor_id;
+              thread.joinId = data.joinId;
+              thread.counselorname = data.counsellorname;
+              thread.counselorImage = result.photo
+
+              const token = Helper.generateToken(userDetails._id);
+              
+              if (!userDetails.stripeCustomerId) {
+                console.log("thread: ", thread, token, slotData);
+                const data = {
+                  userDetails,
+                  token,
+                  membership: {},
+                  slotData : slotData,
+                  thread
+                }
+                // console.log("data: ", data);
+                res.send({ data, success: true, message: " user login success" });
+              }
+              else {
+                console.log("in else");
+                let customerId = userDetails.stripeCustomerId;
+                stripe.invoices.retrieveUpcoming({
+                  customer: customerId
+                })
+                  .then(invoice => {
+                    let end_date = new Date(invoice.lines.data[0].period.start * 1000).toUTCString();
+                    stripe.products.retrieve(
+                      invoice.lines.data[0].plan.product
+                    )
+                      .then(product => {
+                        let membership = {
+                          amount_paid: invoice.lines.data[0].amount,
+                          exp_date: end_date,
+                          plan_name: product.name,
+                          priceId: invoice.lines.data[0].plan.id
+                        }
+                        const data = {
+                          userDetails,
+                          token,
+                          membership,
+                          slotData,
+                          thread
+                        }
+                        res.send({
+                          data,
+                          success: true,
+                          message: 'User login success'
+                        });
+                      })
+                      .catch(error => {
+                        res.send({ error, success: false, message: "stripe error: product fetch error" });
+                      })
+                  })
+                  .catch(error => {
+                    res.send({ error, success: false, message: "Stripe error: inovice detils fetch error" });
+                  })
+              }
+            })
+            .catch(error => {
+              console.log(error);
+              res.send({ error, success: false, message: "DB error : counselor data fetch" });
+            })
         })
         .catch(error => {
           res.send({ error, success: false, message: "Thread data fetch error" });
         })
-
-      const token = Helper.generateToken(userDetails._id);
-      
-      if(!userDetails.stripeCustomerId){
-        const data = {
-          userDetails,
-          token,
-          membership : {},
-          slotData,
-          thread
-        }
-        res.send({data, success : true, message : " user login success"});
-      }
-      else{
-        let customerId = userDetails.stripeCustomerId;
-        stripe.invoices.retrieveUpcoming({
-          customer: customerId
-        })
-        .then(invoice =>{
-          let end_date = new Date(invoice.lines.data[0].period.start * 1000).toUTCString();
-          stripe.products.retrieve(
-            invoice.lines.data[0].plan.product
-          )
-          .then(product =>{
-            let membership = {
-              amount_paid: invoice.lines.data[0].amount,
-              exp_date: end_date,
-              plan_name: product.name,
-              priceId: invoice.lines.data[0].plan.id
-            }
-            const data = {
-              userDetails,
-              token,
-              membership,
-              slotData,
-              thread
-            }
-            res.send({
-              data,
-              success: true,
-              message: 'User login success'
-            });
-          })
-          .catch(error =>{
-            res.send({error, success : false, message : "stripe error: product fetch error"});
-          })
-        })
-        .catch(error =>{
-          res.send({error, success : false, message : "Stripe error: inovice detils fetch error"});
-        })
-      }
     })
   }
   catch (error) {
     res.send({ error: error.message }).status(500);
   }
 };
+
+
 
 
 module.exports.createUser = async function (req, res) {
@@ -188,31 +200,37 @@ module.exports.createUser = async function (req, res) {
             fcmToken : req.body.fcmToken,
             nickName : req.body.nickName
           });
-          user.save((error, response) => {
+          user.save((error, userDetails) => {
             if (error) {
               res.send({data : {}, error: error.message, message: "username or email already taken" }).status(500);
             }
             else{
                 let dummyAssignedData = new CounselorToUser({
                   counselorId : "5fc9cb88db493e26f44e9622",
-                  userId : response.id
+                  userId : userDetails.id
                 });
                 dummyAssignedData.save()
                 .then(doc =>{
                   const chatData = new Chat({
-                    user_id : response._id,
-                    username : response.username,
+                    user_id : userDetails._id,
+                    username : userDetails.username,
                     counsellor_id : "5fc9cb88db493e26f44e9622",
                     counsellorname : "Ares mink",
-                    joinId : response._id + "5fc9cb88db493e26f44e9622",
+                    joinId : userDetails._id +"-" + "5fc9cb88db493e26f44e9622",
+                    message  : "this is intro message send by dummy counselor"
                   });
                   chatData.save()
                   .then(chat =>{
-                      const token =  Helper.generateregisterationToken(response.id);
+                      // let thread = {
+                      //   image : "1609912613626.jpg",
+                      //   chat
+                      // }
+                      const token =  Helper.generateregisterationToken(userDetails.id);
                       let data = {
-                        response,
+                        userDetails,
                         token,
-                        thread  : chatData 
+                        thread : chat,
+                        counselorImage : "1609912613626.jpg"
                       }
                       res.send({ data: data, success: true, message: "User Registered Successfully" });
                   })
@@ -222,6 +240,7 @@ module.exports.createUser = async function (req, res) {
                   console.log(`dummy counselor assigned to user`);
                 })
                 .catch(error =>{
+                  res.send({error, success : false, message : " DB error"});
                   console.log(`user ko dummy counselor assing karne me DB error`);
                 })
               
@@ -245,41 +264,37 @@ module.exports.createUser = async function (req, res) {
 
 // forgot password functionality
 
-module.exports.forgotPassword = (req, res) => {
+module.exports.forgotPassword = async (req, res) => {
   try {
     const email = req.body.email;
-    User.findOne({ email: email }, (error, doc) => {
+    await User.findOne({ email: email }, async (error, doc) => {
       if (error || !doc) {
-        res.send({ error: error, success: false, message: 'DB error or no user exists' });
+        res.send({ error: error, success: false, message: 'DB error: no user exists' });
       }
       else {
-        // console.log("error in else");
+        // console.log("doc: ", doc);
         let otp = Math.floor(Math.random() * 100000);
-        let mailTransport = nodemailer.createTransport({
+        let mailTransport = await nodemailer.createTransport({
           service: 'gmail',
           auth: {
-            user: 'edwy23@gmail.com',
-            pass: '***********'
+            user: 'rahul.168607@knit.ac.in',
+            pass: '8126123782'
           }
         });
 
         let mailDetails = {
-          from: 'edwy23@gmail.com',
+          from: 'rahul.168607@knit.ac.in',
           to: email,
           subject: 'Test mail',
           text: otp.toString()
         }
-
-        mailTransport.sendMail(mailDetails, (error, response)=>{
+        console.log(" maildetails: ", mailDetails);
+        await mailTransport.sendMail(mailDetails, async (error, response)=>{
           if(error || !response){
             res.send({error : error, success : false, message: "Error in mail send : OTP" });
           }
           else{
-            const otpData = {
-              email : email,
-              otp : otp
-            }
-            otpData.save()
+            OTP.findOneAndUpdate({email : email}, {email : email, otp : otp}, {upsert : true, new : true})
             .then(doc =>{
               res.send({response : response, success : true, message : "OTP sent to your mail"});
             })
@@ -303,16 +318,37 @@ module.exports.verifyOTP = (req, res) =>{
   try {
     OTP.findOne({email : req.body.email})
     .then(doc =>{
-      console.log(doc);
+      if(doc.otp === req.body.otp){
+        let password = req.body.password;
+        let confirmPassword = req.body.confirmPassword;
+        if(password === confirmPassword){
+          password = Helper.hashPassword(password);
+          User.findOneAndUpdate({email : req.body.email}, {password : password}, {new : true})
+          .then(user =>{
+            res.send({data : user, success : true, message : "Password update success"});
+          })
+          .catch(error =>{
+            res.send({error, success : false, message : "DB error: password update"});
+          })
+        }
+        else{
+          res.send({data : {},success : false, message : "mismatch password and confirmPassword"});
+        }
+      }
+      else{
+        res.send({success : false, message : "incorrect otp"});
+      }
     })
     .catch(error =>{
-      res.send({error, success : false, message : "DB error in otp details fetch"});
+      res.send({error, success : false, message : "DB error: no user found"});
     })  
   } 
   catch (error) {
-    
+    res.send({error, success : false, message : "unknown error: forgot password"});
   }
 }
+
+
 
 // Reset password 
 module.exports.resetPassword = (req, res) => {
@@ -361,11 +397,11 @@ module.exports.resetPassword = (req, res) => {
 }
 
 // get user data and assigned counselor data
-module.exports.getUserById = (req, res) => {
+module.exports.getUserById = async(req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token);
-    // console.log(`userid`, userId);
-    CounselorToUser.findOne({ userId: userId })
+    
+    await CounselorToUser.findOne({ userId: userId })
       .then(doc => {
         User.findById(userId, async (error, userDetails) => {
           if (error) {
@@ -379,7 +415,7 @@ module.exports.getUserById = (req, res) => {
             let date = new Date().toISOString().substring(0, 10);
             // let date = new Date("2020-12-29").toISOString().substring(0,10);
             let slotData = {};
-            CounselorToUser.find({ userId: userDetails._id, date: { $gt: date } })
+            await CounselorToUser.find({ userId: userDetails._id, date: { $gt: date } })
               .then(doc => {
                 slotData.date = doc[0].date;
                 slotData.slots = doc[0].slots;
@@ -391,16 +427,22 @@ module.exports.getUserById = (req, res) => {
 
             let thread = {};
             await Chat.findOne({ user_id: userDetails._id })
-              .then(data => {
-                thread.counselorId = data.counsellor_id;
-                thread.joinId = data.joinId;
-                // console.log(thread.counselorId);
+              .then(async (data) => {
+                await Counselor.findById(data.counsellor_id)
+                .then(result =>{
+                    thread.counselorId = data.counsellor_id;
+                    thread.joinId = data.joinId;
+                    thread.counselorname = data.counsellorname;
+                    thread.counselorImage = result.photo
+                })
+                .catch(error =>{
+                  res.send({error, success : false, message : "DB error: thread data fetch error"});
+                })
               })
               .catch(error => {
                 res.send({ error, success: false, message: "Thread data fetch error" });
               })
 
-            // console.log("thread data: ", thread);
             // console.log("customerId: ", customerId);
             if(!userDetails.stripeCustomerId){
               const data = {
@@ -469,7 +511,18 @@ module.exports.getUserById = (req, res) => {
 // file upload module
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null,'./uploads/');
+    if(file.mimetype == 'image/jpeg' || file.mimetype == 'image/png'|| file.mimetype == 'image/jpg'){
+      cb(null,'./uploads/');
+    }
+    if(file.mimetype == 'video/mp4'){
+      cb(null,'./uploads/videos');
+    }
+    if(file.mimetype == 'audio/mpeg'){
+      cb(null,'./uploads/audios');
+    }
+    if(file.mimetype == 'application/pdf' || file.mimetype == 'text/plain'){
+      cb(null,'./uploads/attachment');
+    }
   },
 
   filename: (req, file, cb) => {
@@ -482,10 +535,11 @@ const storage = multer.diskStorage({
 
 
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype == 'image/jpeg' || file.mimetype == 'image/png'|| file.mimetype == 'image/jpg') {
+  if (file.mimetype == 'image/jpeg' || file.mimetype == 'image/png' || file.mimetype == 'image/jpg') {
     cb(null, true);
-  } else {
-    cb(null, false);
+  }
+  else {
+    return cb(new Error('only jpeg/png/jpg files are allowed'));
   }
 }
 
@@ -520,14 +574,126 @@ module.exports.profilePictureUpload = (req, res) => {
 }
 
 
+module.exports.audioVideoUpload = (req, res) =>{
+  try {
+    const fileFilter = (req, file, cb) => {
+      if (file.mimetype == 'video/mp4' || file.mimetype == 'audio/mpeg') {
+        cb(null, true);
+      } 
+      else {
+          // cb(null, false);
+          return cb(new Error('only mp4 or mp3/mpeg files are allowed'));
+      }
+    }
+    const upload = multer({storage : storage, fileFilter : fileFilter}).single('file');
+    upload(req, res, (error) =>{
+      if(error){
+        res.send({error, success : false, message : "only mp4 or mp3/mpeg files are allowed"});
+      }
+      else{
+        let { userId } = jwt.decode(req.params.token);
+        let chatData = new Chat({
+          user_id : userId,
+          username : req.body.username,
+          user_image : req.body.user_image,
+          counsellor_id : req.body.counsellor_id,
+          counsellorname : req.body.counsellorname,
+          joinId : req.body.joinId,
+          message : req.file.mimetype,
+          fileupload : req.file.mimetype === 'video/mp4' ? "video/" + req.file.filename :"audio/" + req.file.filename,
+          message_type : req.file.mimetype,
+          time : Date.now(),
+          id : req.body.id
+        });
+        chatData.save()
+        .then(doc => {
+          console.log("doc: ", doc);
+          res.send({ 
+            data: doc.fileupload, 
+            success : true, 
+            message: "you just uploaded a file" 
+          });
+        })
+        .catch(error => {
+          res.send({ error, success: false, message: "DB error: attachment data save error" });
+        })
+      }
+    })
+  } 
+  catch (error) {
+    res.send({error, message : " you just got an error in file upload"});
+  }
+}
+
+// for attachment
+
+module.exports.attachment = (req, res) => {
+  try {
+    const fileFilter = (req, file, cb) => {
+      if (file.mimetype == 'application/pdf' || file.mimetype == 'text/plain') {
+        cb(null, true);
+      }
+      else {
+        // cb(null, false)
+        cb(new Error('only pdf or txt files are allowed'));
+      }
+    }
+    const upload = multer({ storage: storage, fileFilter: fileFilter }).single('file');
+    upload(req, res, async (error) => {
+      if (error) {
+        res.send({ error, success: false, message: "only pdf or txt files are allowed" });
+      }
+      else {
+        let { userId } = jwt.decode(req.params.token);
+        // let userId = req.params.token;
+        let chatData = new Chat({
+          user_id : userId,
+          username : req.body.username,
+          user_image : req.body.user_image,
+          counsellor_id : req.body.counsellor_id,
+          counsellorname : req.body.counsellorname,
+          joinId : req.body.joinId,
+          message : "attachment",
+          fileupload : "attachment/" + req.file.filename,
+          message_type : req.file.mimetype,
+          time : Date.now(),
+          id : req.body.id
+        });
+        chatData.save()
+          .then(doc => {
+            console.log("doc: ", doc);
+            res.send({ 
+              data: "attachment/" + req.file.filename, 
+              success : true, 
+              message: "you just uploaded a file" 
+            });
+          })
+          .catch(error => {
+            res.send({ error, success: false, message: "DB error: attachment data save error" });
+          })
+      }
+    })
+  }
+  catch (error) {
+    res.send({ error, success : false, message: " you just got error in attachment" });
+  }
+}
 
 
+
+// nick name or email update
 
 module.exports.updateNickName = (req, res) => {
-      try {
-        let {userId} = jwt.decode(req.params.token);
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    // let userId = req.params.token;
+    if (!req.body.email && !req.body.nickName) {
+      res.send({ data: {}, success: false, message: "nothing update" });
+    }
+    else{
+      if(req.body.email && req.body.nickName){
         User.findByIdAndUpdate({_id : userId},
-          [{$set : {nickName : req.body.nickName}}],{upsert : true, new : true})
+          [{$set : {nickName : req.body.nickName, email : req.body.email}}],{new : true})
           .then((result, error) =>{
             if(error){
               res.send({data : {}, error, success : false, message : "DB erro in nick name update"});
@@ -536,9 +702,35 @@ module.exports.updateNickName = (req, res) => {
           })
           .catch(error => res.send({error, message: "DB error in nick name update", success: false }).status(201));
       }
-      catch (error) {
-        res.send({ data : {}, success : false, error, message : " invalid request" }).status(203);
+      else {
+        if (!req.body.email) {
+          User.findByIdAndUpdate({_id : userId},
+            [{$set : {nickName : req.body.nickName}}],{new : true})
+            .then((result, error) =>{
+              if(error){
+                res.send({data : {}, error, success : false, message : "DB erro in nick name update"});
+              }
+              res.send({data : result, message: "nick name uodated", success: true }).status(201);
+            })
+            .catch(error => res.send({error, message: "DB error in nick name update", success: false }).status(201));
+        }
+        if (!req.body.nickName) {
+          User.findByIdAndUpdate({_id : userId},
+            [{$set : {email : req.body.email}}],{new : true})
+            .then((result, error) =>{
+              if(error){
+                res.send({data : {}, error, success : false, message : "DB erro in nick name update"});
+              }
+              res.send({data : result, message: "nick name uodated", success: true }).status(201);
+            })
+            .catch(error => res.send({error, message: "DB error in nick name update", success: false }).status(201));
+        }
       }
+    }
+  }
+  catch (error) {
+    res.send({ data: {}, success: false, error, message: " invalid request" }).status(203);
+  }
 }
 
 
@@ -1024,13 +1216,9 @@ module.exports.cancelSession = (req, res) =>{
     }  
   } 
   catch (error) {
-    
+    res.send({error});
   }
 }
-
-
-
-
 
 
 

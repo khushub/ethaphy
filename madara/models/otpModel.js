@@ -4,7 +4,7 @@ const Schema = mongoose.Schema;
 
 const otpSchema = new Schema({
     otp : {
-        type : Number
+        type : String
     },
 
     email : {
