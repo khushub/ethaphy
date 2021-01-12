@@ -599,8 +599,8 @@ module.exports.audioVideoUpload = (req, res) =>{
           counsellor_id : req.body.counsellor_id,
           counsellorname : req.body.counsellorname,
           joinId : req.body.joinId,
-          message : req.file.mimetype,
-          fileupload : req.file.mimetype === 'video/mp4' ? "video/" + req.file.filename :"audio/" + req.file.filename,
+          message : req.file.mimetype === 'video/mp4' ? "video/" + req.file.filename :"audio/" + req.file.filename,
+          fileupload : req.file.mimetype,
           message_type : req.file.mimetype,
           time : Date.now(),
           id : req.body.id
@@ -653,8 +653,8 @@ module.exports.attachment = (req, res) => {
           counsellor_id : req.body.counsellor_id,
           counsellorname : req.body.counsellorname,
           joinId : req.body.joinId,
-          message : "attachment",
-          fileupload : "attachment/" + req.file.filename,
+          message : "attachment/" + req.file.filename,
+          fileupload : "attachment",
           message_type : req.file.mimetype,
           time : Date.now(),
           id : req.body.id

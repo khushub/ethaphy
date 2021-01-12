@@ -7,11 +7,20 @@ router.get('/', userHandler.getQuestions);
 
 router.get('/homeScreenVideos', (req, res) =>{
   try {
-    const data = {
-      1 : 'https://youtu.be/tyQ1ao5RHuM',
-      2 : 'https://youtu.be/nGvC9bg95OI',
-      3 : 'https://youtu.be/YHucPsVfzo8'
-    }
+    const data =[
+      {
+          'url': "https://youtu.be/tyQ1ao5RHuM",
+          'id': 1
+      },
+      {
+          'name': "https://youtu.be/nGvC9bg95OI",
+          'id': 2
+      },
+      {
+          'name': "https://youtu.be/YHucPsVfzo8",
+          'id': 3
+      }
+  ]
     res.send({data, success : true})  
   } 
   catch (error) {

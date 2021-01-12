@@ -27,6 +27,10 @@ router.post('/acceptUser/:token', counselorHandler.userAssignment);
 
 router.put('/introMessage/:token', counselorHandler.introMessage);
 
+router.put('/upload/introVideo/:token', counselorHandler.uploadIntroVideo);
+
+router.post('/getMessages/:token', counselorHandler.getMessages);
+
 
 module.exports = router;
 

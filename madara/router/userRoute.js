@@ -3,9 +3,7 @@ const userHandler = require('../handlers/user');
 const stripeHandler = require('../handlers/addCard');
 
 
-
-
-
+// Dashboard route
 router.post('/login', userHandler.login);
 
 router.post('/register', userHandler.createUser);

@@ -58,6 +58,8 @@ const counselorSchema = new Schema({
 
     introMessage : {type : String},
 
+    introVideo : {type : String},
+
     fcmToken : { type : String}
 
 }, {timestamps : true});

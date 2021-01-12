@@ -30,8 +30,10 @@ module.exports.addCard = async (req, res) => {
 
          stripe.customers.create(customerData)
          .then(customer =>{
+             console.log("customer: ", customer.id);
          	stripe.tokens.create(cardDetails)
          	.then(token =>{
+                 console.log("token.id: ", token.id);
          		stripe.customers.createSource(customer.id, {source : token.id})
          		.then(source =>{
                      console.log("source: ", source, customer.id);

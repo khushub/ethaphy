@@ -16,7 +16,12 @@ const userModel = require('../models/userModel');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null,'./uploads/');
+    if(file.mimetype== 'image/jpeg' || file.mimetype == 'image/png'|| file.mimetype == 'image/jpg'){
+      cb(null,'./uploads/');
+    }
+    if(file.mimetype == 'video/mp4'){
+      cb(null,'./uploads/introMessage');
+    }
   },
 
   filename: (req, file, cb) => {
@@ -222,6 +227,9 @@ module.exports.createCounselor = async function (req, res) {
   }
 
 
+
+//upload intro message 
+
 module.exports.introMessage = async (req, res) =>{
   try {
     // let id = jwt.decode(req.params.token);
@@ -244,14 +252,63 @@ module.exports.introMessage = async (req, res) =>{
 }
 
 
+// upload intro video
+
+module.exports.uploadIntroVideo = async (req, res) =>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    console.log("userId",userId);
+    await Counselor.findById(userId)
+    .then(counselor =>{
+      console.log("counselor: ", counselor);
+      try {
+        const fileFilter = (req, file, cb) =>{
+          if(file.mimetype === 'video/mp4'){
+            cb(null, true)
+          }
+          else{
+            return cb(new Error('only mp4 files are allowed'));
+          }
+        };
+        const upload = multer({storage : storage, fileFilter : fileFilter}).single('file');
+        upload(req, res, (error) =>{
+          if(error){
+            res.send({error, success : false, message : "only mp4 files are allowed"});
+          }
+          else{
+            counselor.introVideo = req.file.filename;
+            counselor.save()
+            .then(doc =>{
+              res.send({data : doc, success : true, message : "video uploaded"});
+            })
+            .catch(error =>{
+              res.send({error, success : false, message : "DB error: intro video save"});
+            })
+          }
+        })  
+      } 
+      catch (error) {
+        res.send({error, successc : false, message : "file upload error"});
+      }
+    })
+    .catch(error =>{
+      res.send({error, successc : false, message : "NO counselor found"})
+    })
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "unknown error"});
+  }
+}
+
+
 // Adding time slot from counselor end for a week
  
-module.exports.addTimeSlot = (req, res) => {
+module.exports.addTimeSlot = async (req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token); // sepearting userid of counselor from  token
 
     // first delete all previous slots for that counselor
-    Slot.deleteMany({counselorId : userId})
+    await Slot.deleteMany({counselorId : userId})
     .then(result =>{
       console.log("result", result);
     })
@@ -262,21 +319,22 @@ module.exports.addTimeSlot = (req, res) => {
 
     const daysArray = req.body.daysArray;  // array of availibility of days 
 
-    const startTimeArray = req.body.startTimeArray; // start time array of each days
+    const startTimeArray = req.body.startTimeArray; // start time array of days
 
-    const endTimeArray = req.body.endTimeArray;     // end time array of each days
+    const endTimeArray = req.body.endTimeArray;     // end time array of days
 
     // inserting doc in db for each day    
     let i = 0;
-    daysArray.forEach(day => {
+    daysArray.forEach((day) => {
       let date = new Date(startTimeArray[i]);
-      // console.log("date: ",date.toTimeString().substring(0,5));
+      console.log("date: ",date.toUTCString());
 
       // do sloting here
       let slot = [];
       let timeSlot = [];
       let j = 0;
       let compareTime = date.getTime();
+      // console.log("comparetime: ", compareTime);
 
       while (new Date(endTimeArray[i]).getTime() >= compareTime) {
         slot[j] = date.setMinutes(date.getMinutes() + 30);
@@ -289,12 +347,12 @@ module.exports.addTimeSlot = (req, res) => {
         timeSlot[j] = time;
         j++;
       }
-
+      // console.log("time slot: ", timeSlot);
       // inserting slot timing in DB
       const slotDB = new Slot({
         counselorId: userId,
         day: day,
-        date : req.body.date,
+        date : startTimeArray[i],
         slot: timeSlot.map((time, index, array) => {
           if (array[index + 1] !== undefined) return { status: 0, time: time + "-" + array[index + 1] };
         })
@@ -310,9 +368,9 @@ module.exports.addTimeSlot = (req, res) => {
           console.log("error", error);
           res.send({ error: error, success: false, message: "error at sloting" });
         })
-      i++;
+        i++;
     });
-    res.send({ data: {}, message: "testing" });
+    res.send({ data: {}, success : true, message: "testing" });
   }
   catch (error) {
     res.send({ error: error, message: "something gone wrong while scheduling" });
@@ -394,46 +452,9 @@ module.exports.disableSlotsByDay = (req, res) => {
   }
 }
 
-// accept a user
-
-module.exports.userAssignment = (req, res) =>{
-  try {
-      // let counselorId = jwt.decode(req.params.token);
-      let counselorId = req.params.token;
-      let userId = req.body.userId
-
-      let assignmentData = new CounselorToUser({
-        counselorId : counselorId,
-        userId : userId
-      });
-      assignmentData.save()
-      .then(doc =>{
-        Chat.findOneAndUpdate({ user_id: req.body.userId},
-          {$set : {
-            counsellor_id : counselorId,
-            counsellorname : req.body.counselorName,
-            joinId : req.body.userId + "-" + counselorId
-          }
-        }, {upsert : true, new : true})
-        .then(chat =>{
-          console.log("chat : ", chat);
-          res.send({thread : chat, success : true, message : "counselor assing to user"});
-        })
-        .catch(error =>{
-          res.send({error, success : false , message : "DB error : thread data save error"});
-        }) 
-      })
-      .catch(error =>{
-        res.send({error, success : false, message : "DB error in counselor assingment"});
-      })
-  } 
-  catch (error) {
-    res.send({error, success : false, message : "something goes wrong in counselor assignment"});
-  }
-}
 
 
-
+// Potential functionality
 
 module.exports.potential = async (req, res) =>{
   try {
@@ -460,7 +481,79 @@ module.exports.potential = async (req, res) =>{
 }
 
 
+// accept a user
 
+module.exports.userAssignment = async (req, res) =>{
+  try {
+      // let counselorId = jwt.decode(req.params.token);
+      let counselorId = req.params.token;
+      let userId = req.body.userId
+      console.log("counselor: ", counselorId, " userId: ", userId);
+      let counselorData = await Counselor.findById(counselorId);
+      console.log("counselorData: ",counselorData.introMessage);
+      let assignmentData = new CounselorToUser({
+        counselorId : counselorId,
+        userId : userId
+      });
+      await assignmentData.save()
+      .then(async (doc) =>{
+        console.log("doc: ", doc);
+        await Chat.findOneAndUpdate({ user_id: req.body.userId },
+          [{$set : {
+            counsellor_id : counselorId,
+            counsellorname : req.body.counselorName,
+            joinId : req.body.userId + "-" + counselorId,
+            message : counselorData.introMessage ? counselorData.introMessage : ""
+          }
+        }], {new : true})
+        .then(chat =>{
+          console.log("chat : ", chat);
+          res.send({thread : chat,success : true, message : "counselor assing to user"});
+        })
+        .catch(error =>{
+          res.send({error, success : false , message : "DB error : thread data save error"});
+        }) 
+      })
+      .catch(error =>{
+        res.send({error, success : false, message : "DB error in counselor assingment"});
+      })
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "something goes wrong in counselor assignment"});
+  }
+}
+
+
+// get messages for a user
+
+module.exports.getMessages = async (req, res) => {
+  try {
+    await userModel.findById(req.body.userId)
+      .then(async (user) => {
+        await Chat.findOne({ user_id: req.body.userId })
+          .then(async (thread) => {
+            const slot = await CounselorToUser.find({userId : req.body.userId});
+
+            let data = await thread.toJSON();
+            data.status = user.status;
+            data.slots = {
+              time : slot[0].slots,
+              date : slot[0].date
+            };
+            res.send({ data, success: true, message: "Messages fetched" });
+          })
+          .catch(error => {
+            res.send({ error, success: false, message: "DB error: No user found" });
+          })
+      })
+      .catch(error => {
+        res.send({ error, success: false, message: "DB error: NO user exist" });
+      })
+  }
+  catch (error) {
+    res.send({ error, success: false, message: "unknown error" });
+  }
+}
 
 
 // forgot password functionality
