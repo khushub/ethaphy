@@ -6,7 +6,7 @@ const counselorToUser = new Schema({
 
     userId : { type : String},
 
-    slots : {type : Array},
+    slots : {type : Object},
 
     date : {type : String}
 });

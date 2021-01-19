@@ -64,7 +64,7 @@ module.exports.login = async function (req, res) {
       let date = new Date().toISOString().substring(0, 10);
       // let date = new Date("2020-12-29").toISOString().substring(0,10);
       let slotData = {};
-      await CounselorToUser.find({ userId: userDetails._id, date: { $gt: date } })
+      await CounselorToUser.find({ userId: userDetails._id, date: { $gte: date } })
         .then((doc) => {
           slotData.date = doc[0].date;
           slotData.slots = doc[0].slots;
@@ -415,7 +415,7 @@ module.exports.getUserById = async(req, res) => {
             let date = new Date().toISOString().substring(0, 10);
             // let date = new Date("2020-12-29").toISOString().substring(0,10);
             let slotData = {};
-            await CounselorToUser.find({ userId: userDetails._id, date: { $gt: date } })
+            await CounselorToUser.find({ userId: userDetails._id, date: { $gte: date } })
               .then(doc => {
                 slotData.date = doc[0].date;
                 slotData.slots = doc[0].slots;
@@ -515,13 +515,13 @@ const storage = multer.diskStorage({
       cb(null,'./uploads/');
     }
     if(file.mimetype == 'video/mp4'){
-      cb(null,'./uploads/videos');
+      cb(null,'./uploads/user/videos');
     }
     if(file.mimetype == 'audio/mpeg'){
-      cb(null,'./uploads/audios');
+      cb(null,'./uploads/user/audios');
     }
     if(file.mimetype == 'application/pdf' || file.mimetype == 'text/plain'){
-      cb(null,'./uploads/attachment');
+      cb(null,'./uploads/user/attachment');
     }
   },
 
@@ -574,8 +574,10 @@ module.exports.profilePictureUpload = (req, res) => {
 }
 
 
-module.exports.audioVideoUpload = (req, res) =>{
+module.exports.audioVideoUpload = async (req, res) =>{
   try {
+    console.log("req.file.mimetype: ", req.body);
+    let fileSize = 20 * 1024 *1024;
     const fileFilter = (req, file, cb) => {
       if (file.mimetype == 'video/mp4' || file.mimetype == 'audio/mpeg') {
         cb(null, true);
@@ -585,7 +587,10 @@ module.exports.audioVideoUpload = (req, res) =>{
           return cb(new Error('only mp4 or mp3/mpeg files are allowed'));
       }
     }
-    const upload = multer({storage : storage, fileFilter : fileFilter}).single('file');
+    const upload = multer({
+      storage : storage, 
+      fileFilter : fileFilter, 
+      limits : {fileSize : fileSize}}).single('file');
     upload(req, res, (error) =>{
       if(error){
         res.send({error, success : false, message : "only mp4 or mp3/mpeg files are allowed"});
@@ -601,7 +606,7 @@ module.exports.audioVideoUpload = (req, res) =>{
           joinId : req.body.joinId,
           message : req.file.mimetype === 'video/mp4' ? "video/" + req.file.filename :"audio/" + req.file.filename,
           fileupload : req.file.mimetype,
-          message_type : req.file.mimetype,
+          message_type : req.file.mimetype === 'video/mp4' ? "video" : "audio",
           time : Date.now(),
           id : req.body.id
         });
@@ -1088,7 +1093,7 @@ module.exports.bookSlots = async (req, res) => {
         description: 'one time payment',
         address: req.body.address
       });
-      
+
       const token = await stripe.tokens.create({
         card: {
           number: req.body.cardNumber,
@@ -1101,20 +1106,20 @@ module.exports.bookSlots = async (req, res) => {
       stripe.customers.createSource(customer.id,{
         source: token.id
       })
-      .then(source =>{
-        console.log("source :", source);
+      .then(async (source) =>{
+        console.log("source :", source.id);
       })
       .catch(error =>{
         console.log("error: ", error);
       })
-      stripe.charges.create({
+      await stripe.charges.create({
         amount: 2000,
         currency: 'usd',
         source: source.id,
         customer: customer.id,
         description: 'One time payment ',
       })
-      .then(charge =>{
+      .then(async (charge) =>{
         console.log("cahger: ", charge);
         const slotData = new CounselorToUser({
           counselorId: req.body.counselorId,
@@ -1124,7 +1129,7 @@ module.exports.bookSlots = async (req, res) => {
             time: [req.body.time]
           }
         });
-        slotData.save()
+        await slotData.save()
         .then(slot =>{
           res.send({data : slot, success : false, message : "session book success"});
         })
@@ -1147,6 +1152,7 @@ module.exports.bookSlots = async (req, res) => {
             description: 'My First Test Charge (created for API docs)',
           })
             .then(charge => {
+              console.log("charge: ",charge);
               const slotData = new CounselorToUser({
                 counselorId: req.body.counselorId,
                 userId: userId,

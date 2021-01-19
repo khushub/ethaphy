@@ -11,7 +11,7 @@ const Slot = require('../models/slotModel');
 const CounselorToUser = require('../models/counselorToUser');
 const OTP = require('../models/otpModel');
 const userModel = require('../models/userModel');
-
+const UpcomingSlots = require('../models/upcomingAvailability')
 
 
 const storage = multer.diskStorage({
@@ -292,7 +292,7 @@ module.exports.uploadIntroVideo = async (req, res) =>{
       }
     })
     .catch(error =>{
-      res.send({error, successc : false, message : "NO counselor found"})
+      res.send({error, successc : false, message : "No counselor found"})
     })
   } 
   catch (error) {
@@ -301,42 +301,48 @@ module.exports.uploadIntroVideo = async (req, res) =>{
 }
 
 
-// Adding time slot from counselor end for a week
+// add weekly availability
  
-module.exports.addTimeSlot = async (req, res) => {
+module.exports.addWeeklyAvailability = async (req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token); // sepearting userid of counselor from  token
-
-    // first delete all previous slots for that counselor
-    await Slot.deleteMany({counselorId : userId})
-    .then(result =>{
-      console.log("result", result);
-    })
-    .catch(error => {
-      console.log("error: ", error);
-    })
+    await Slot.deleteMany({ counselorId: userId })
+      .then(result => {
+        console.log("result", result);
+      })
+      .catch(error => {
+        console.log("error: ", error);
+      })
 
 
-    const daysArray = req.body.daysArray;  // array of availibility of days 
+    const daysArray = req.body.daysArray;  // array of availability of days 
 
     const startTimeArray = req.body.startTimeArray; // start time array of days
 
     const endTimeArray = req.body.endTimeArray;     // end time array of days
 
+    let finalArray = [];
     // inserting doc in db for each day    
     let i = 0;
-    daysArray.forEach((day) => {
-      let date = new Date(startTimeArray[i]);
-      console.log("date: ",date.toUTCString());
+    daysArray.forEach(async(day) => {
+      let startTime = new Date().toISOString().substring(0, 10) + " " + startTimeArray[i]; // start time for a day
+
+      // console.log("start time: ", startTime);
+      let date = new Date(startTime);
+      // console.log("date: ",date.toUTCString());
 
       // do sloting here
       let slot = [];
       let timeSlot = [];
       let j = 0;
       let compareTime = date.getTime();
-      // console.log("comparetime: ", compareTime);
+      console.log("comparetime: ", compareTime);
+      let endTime = new Date(new Date().toISOString().substring(0, 10) + " " + endTimeArray[i]); // end time for a day
+      console.log("end time : ", endTime);
 
-      while (new Date(endTimeArray[i]).getTime() >= compareTime) {
+
+      // making slots for a day
+      while (endTime.getTime() >= compareTime) {
         slot[j] = date.setMinutes(date.getMinutes() + 30);
 
         // formatting unix time_stamp to date_time 
@@ -346,34 +352,181 @@ module.exports.addTimeSlot = async (req, res) => {
         let time = dt.getHours() + ':' + dt.getMinutes();
         timeSlot[j] = time;
         j++;
+        // console.log("time slot: ", timeSlot);
       }
-      // console.log("time slot: ", timeSlot);
-      // inserting slot timing in DB
-      const slotDB = new Slot({
-        counselorId: userId,
+      finalArray[i] = {
         day: day,
-        date : startTimeArray[i],
+        status: 'active',
         slot: timeSlot.map((time, index, array) => {
-          if (array[index + 1] !== undefined) return { status: 0, time: time + "-" + array[index + 1] };
+          if (array[index + 1] !== undefined) return { status: 0, time: time };
         })
           .filter((time) => {
             return time !== undefined;
           })
-      });
-      slotDB.save()
-        .then(response => {
-          console.log("response", response);
-        })
-        .catch(error => {
-          console.log("error", error);
-          res.send({ error: error, success: false, message: "error at sloting" });
-        })
-        i++;
+      }
+      // console.log("time slot: ", timeSlot);
+      i++;
     });
-    res.send({ data: {}, success : true, message: "testing" });
+
+    const slotDB = new Slot({
+      counselorId: userId,
+      availability: finalArray
+    });
+    await slotDB.save()
+      .then(async (response) => {
+        // console.log("res", response.availability);
+        const availability = response.availability
+        let startDate = new Date();
+        let endDate = new Date();
+        endDate.setMonth(endDate.getMonth()+1);
+        console.log("start date: ", startDate, " ", endDate);
+
+        const days = ["Sun","Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        let arrayOfUpcoming = [];
+        for(let i = startDate, k=0; i<= endDate; i.setDate(i.getDate()+1)){
+          console.log("date is: ",i.toLocaleDateString() ,days[i.getDay()]);
+
+          for(let j = 0; j < availability.length; j++){
+            // console.log("available day: ", availability[j].day);
+            if(days[i.getDay()] === availability[j].day){
+              arrayOfUpcoming[k] = {
+                day : availability[j].day,
+                date : i.toISOString(),
+                status : 'active',
+                slot : availability[j].slot
+              }
+              k++;
+            }
+          }
+        }
+        console.log(arrayOfUpcoming);
+        const upcomingSlot = new UpcomingSlots({
+          counselorId : userId,
+          availability : arrayOfUpcoming
+        });
+        await upcomingSlot.save()
+        .then(doc =>{
+          doc.availability = doc.availability.map(slots =>{
+
+            let dataArray = slots.slot.map(data =>{
+              return {time : data.time, status : data.status}
+            })
+  
+            console.log(" slots.slot", slots.day);
+            return {day : slots.day, date: slots.date ,dataArray}
+          })
+          res.send({data: doc.availability, success: true, message: "data saved" });
+        })
+        .catch(error =>{
+          res.send({error});
+        })
+      })
+      .catch(error => {
+        console.log("error", error);
+        res.send({ error: error, success: false, message: "error at sloting" });
+      })
   }
   catch (error) {
     res.send({ error: error, message: "something gone wrong while scheduling" });
+  }
+}
+
+
+
+
+module.exports.setUpcomingSlots = async (req, res) => {
+  try {
+    let { userId } = jwt.decode(req.params.token);
+    // let userId = req.params.token;
+
+    let startDate = new Date(req.body.startDate);
+    let endDate = new Date(req.body.endDate);
+    
+    const days = ["Sun","Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    const weekAvailability = await Slot.findOne({ counselorId: userId });
+    const availability = weekAvailability.availability;
+
+    if (!weekAvailability) {
+      res.send({ data: {}, success: false, message: "You need to set your weekly availabilit" });
+    }
+    else {
+      if (startDate.toDateString() == endDate.toDateString()) {
+        for(let i = startDate; i < endDate; i.setDate(i.getDate() + 1)){
+          console.log(i);
+        }
+        const slotDB = new UpcomingSlots({
+          counselorId : userId,
+          availability : availability
+        });
+
+        // await UpcomingSlots.find({ date: startDate })
+        //   .then(doc => {
+        //     res.send({ data: doc, success: true, message: "slot fetched" });
+        //   })
+        //   .catch(error => {
+        //     res.send({ error, success: false, message: "DB error: for same date" });
+        //   })
+      }
+      else {
+        let finalArray = [];
+        for(let i = startDate, k=0; i<= endDate; i.setDate(i.getDate()+1)){
+          console.log("date is: ",i.toLocaleDateString() ,days[i.getDay()]);
+
+          for(let j = 0; j < availability.length; j++){
+            // console.log("available day: ", availability[j].day);
+            if(days[i.getDay()] === availability[j].day){
+              console.log("in if count: ");
+              finalArray[k] = {
+                day : availability[j].day,
+                date : i.toDateString(),
+                status : 'active',
+                slot : availability[j].slot
+              }
+              k++;
+            }
+          }
+        }
+        console.log(finalArray);
+        const slotDB = new UpcomingSlots({
+          counselorId : userId,
+          availability : finalArray
+        });
+        await slotDB.save()
+        .then(doc =>{
+          res.send({doc});
+        })
+        .catch(error =>{
+          res.send({error});
+        })
+      } 
+    }
+
+  }
+  catch (error) {
+    res.send({ error, success: false, message: "unknown error: set upcoming slots" });
+  }
+}
+
+
+module.exports.getUpcomingSlots = async (req,res)=>{
+  try {
+    let { userId } = jwt.decode(req.params.token);
+    let startDate = new Date();
+    console.log("start date: ", startDate.toISOString());
+    await UpcomingSlots.find({counselorId : userId})
+    .then(data =>{
+      data[0].availability = data[0].availability.filter(slot =>{
+        return slot.date >= new Date().toISOString()
+      })
+      res.send({data : data[0].availability});
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "DB error: upcoming slot fetch"});
+    })
+  } 
+  catch (error) {
+   res.send({error, success : false, message : "error in upcoming slot fetch"}) ;
   }
 }
 
@@ -422,12 +575,11 @@ module.exports.disableSlotsByTime = (req, res) => {
 }
 
 
-module.exports.disableSlotsByDay = (req, res) => {
+module.exports.disableSlotsByDate = (req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token);
-    console.log(`userId: ${userId}`);
-    let day = req.body.day;
-    Slot.findOneAndUpdate({ $and: [{ counselorId: userId }, { day: day }] },
+    let date = new Date(req.body.date);
+    Slot.findOneAndUpdate({ $and: [{ counselorId: userId }, { date: date }] },
       { $set: { status: 'inactive' } },
       { new: true },
       (error, doc) => {
@@ -532,14 +684,16 @@ module.exports.getMessages = async (req, res) => {
       .then(async (user) => {
         await Chat.findOne({ user_id: req.body.userId })
           .then(async (thread) => {
-            const slot = await CounselorToUser.find({userId : req.body.userId});
-
+            let date = new Date().toISOString().substring(0, 10);
+            let slots = await CounselorToUser.find({ userId: req.body.userId, date: { $gte: date } })
+            console.log("slot: ",  typeof slots);
             let data = await thread.toJSON();
             data.status = user.status;
-            data.slots = {
-              time : slot[0].slots,
-              date : slot[0].date
-            };
+            slots = slots.map(slot =>{
+              return {time  : slot.slots, date : slot.date };
+            });
+            console.log("slots: ", slots);
+            data.slots = slots
             res.send({ data, success: true, message: "Messages fetched" });
           })
           .catch(error => {
@@ -647,6 +801,53 @@ module.exports.verifyOTP = (req, res) =>{
 }
 
 
+
+// change password
+
+module.exports.changePassword = (req, res) => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+    if (newPassword !== confirmPassword) {
+      res.send({data : {}, error: 'mismatch confirm password with new password', success : false }).status(301);
+    }
+    else {
+      let { userId } = jwt.decode(req.params.token);
+      Counselor.findById(userId, (error, counselor) => {
+        if (error) {
+          res.send({data : {}, error: error.message, success : false, message: 'DB error in Reset Password' });
+        }
+        if (!counselor) {
+          res.send({data : {}, error: error, success : false, message: 'No counselor found with such id'}).status(302);
+        }
+        else {
+          let { password } = counselor;
+
+          if (!Helper.comparePassword(password, currentPassword)) {
+            return res.send({data : {}, error: "Incorrect current password", success : false }).status(303);
+          }
+
+          else{
+            counselor.password = Helper.hashPassword(newPassword);
+            counselor.save((error,doc)=>{
+              if(error){
+                res.send({data : {}, error : error.message, success : false, message : 'Reset Password DB error'});
+              }
+              if(!doc){
+                res.send({data : {}, error : error.message,success : false, message : 'No user password updated'});
+              }
+              else{
+                res.send({data : doc, success : true, message : 'password reset successfully'}).status(200);
+              }
+            })
+          }
+        }
+      })
+    }
+  }
+  catch (error) {
+    res.send({error : error.message,success : false, message : 'Unknown error in reset password'}).status(500);
+  }
+}
 
 
 

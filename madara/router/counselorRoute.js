@@ -13,13 +13,19 @@ router.post('/verifyOTP', counselorHandler.verifyOTP);
 
 router.get('/myProfile/:token', counselorHandler.getCounselor);
 
-router.post('/addTimeSlot/:token', counselorHandler.addTimeSlot);
+router.put('/changePassword/:token', counselorHandler.changePassword);
+
+router.post('/setUpcomingSlots/:token', counselorHandler.setUpcomingSlots);
+
+router.post('/weeklyAvailability/:token', counselorHandler.addWeeklyAvailability);
+
+router.get('/getUpcomingSlots/:token', counselorHandler.getUpcomingSlots);
 
 router.get('/getAllSlots/:token', counselorHandler.getAllSlots);
 
 router.put('/disableSlotsByTime/:token', counselorHandler.disableSlotsByTime);
 
-router.put('/disableSlotsByDay/:token', counselorHandler.disableSlotsByDay);
+router.put('/disableSlotsByDate/:token', counselorHandler.disableSlotsByDate);
 
 router.get('/potential/:token', counselorHandler.potential);
 
