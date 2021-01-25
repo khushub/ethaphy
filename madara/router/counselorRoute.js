@@ -2,7 +2,7 @@ const router = require('express').Router();
 const counselorHandler = require('../handlers/counselor');
 
 
-
+// profile section
 router.post('/login', counselorHandler.login);
 
 router.post('/register',counselorHandler.createCounselor);
@@ -15,6 +15,10 @@ router.get('/myProfile/:token', counselorHandler.getCounselor);
 
 router.put('/changePassword/:token', counselorHandler.changePassword);
 
+router.put('/editProfile/:token', counselorHandler.editProfile);
+
+
+// scheduling related routes
 router.post('/filterByDate/:token', counselorHandler.filterByDate);
 
 router.post('/weeklyAvailability/:token', counselorHandler.addWeeklyAvailability);
@@ -23,22 +27,28 @@ router.get('/getUpcomingSlots/:token', counselorHandler.getUpcomingSlots);
 
 router.get('/getBookingsForCal/:token', counselorHandler.forCalendar);
 
-router.post('/todayPlan/:token', counselorHandler.todayPlan)
-
 router.put('/disableSlotsByTime/:token', counselorHandler.disableSlotsByTime);
 
 router.put('/disableSlotsByDate/:token', counselorHandler.disableSlotsByDate);
+
+
+// dashboard
+router.post('/todayPlan/:token', counselorHandler.todayPlan)
 
 router.get('/potential/:token', counselorHandler.potential);
 
 router.post('/acceptUser/:token', counselorHandler.userAssignment);
 
+router.post('/getMessages/:token', counselorHandler.getMessages);
+
+
+// update and file upload related routes
+
 router.put('/introMessage/:token', counselorHandler.introMessage);
 
 router.put('/upload/introVideo/:token', counselorHandler.uploadIntroVideo);
 
-router.post('/getMessages/:token', counselorHandler.getMessages);
-
+router.post('/upload/document/:token', counselorHandler.uploadDocument);
 
 module.exports = router;
 

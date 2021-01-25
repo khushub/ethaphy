@@ -60,7 +60,9 @@ const counselorSchema = new Schema({
 
     introVideo : {type : String},
 
-    fcmToken : { type : String}
+    fcmToken : { type : String},
+
+    files : { type : Array}
 
 }, {timestamps : true});
 

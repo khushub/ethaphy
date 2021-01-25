@@ -16,11 +16,16 @@ const UpcomingSlots = require('../models/upcomingAvailability')
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    if(file.mimetype== 'image/jpeg' || file.mimetype == 'image/png'|| file.mimetype == 'image/jpg'){
-      cb(null,'./uploads/');
+    if (file.mimetype == 'image/jpeg' || file.mimetype == 'image/png' || file.mimetype == 'image/jpg') {
+      cb(null, './uploads/counselor/');
     }
-    if(file.mimetype == 'video/mp4'){
-      cb(null,'./uploads/introMessage');
+    if (file.mimetype == 'video/mp4') {
+      cb(null, './uploads/counselr/introVideo/');
+    }
+
+    if (file.mimetype == 'application/pdf' || file.mimetype == 'application/msword'
+      || file.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      cb(null, './uploads/counselor/files');
     }
   },
 
@@ -33,124 +38,123 @@ const storage = multer.diskStorage({
 });
 
 
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype == 'image/jpeg' || file.mimetype == 'image/png'|| file.mimetype == 'image/jpg') {
-    cb(null, true);
-  } else {
-    cb(null, false);
-  }
-}
-
-const upload = multer({ storage : storage, fileFilter :fileFilter }).single('photo');
-
 
 // Counselor Registeration
 
 module.exports.createCounselor = async function (req, res) {
-    upload(req, res, (err) => {
-      if (err) {
-        console.log(err);
-        res.send({error : err, success : false, message : "file upload error"})
-      }
-      else {
-        try {
-          // check if all field is available
-          //   const { username, email, password } = req.body;
-          //   if (!username || !email || !password) {
-          //     return res.send({data : {}, error: "username or email or password is missing", success : false }).status(400);
-          //   }
-  
-          // check if user exist
-           Counselor.findOne({ $and: [{ email: req.body.email, username: req.body.username }] })
-            .then(counselor => {
-              if (!counselor) {
-                const counselor = new Counselor({
-                  firstName: req.body.firstName,
-                  lastName: req.body.lastName,
-                  userName: req.body.userName,
-                  email: req.body.email,
-                  mobileNumber: req.body.mobileNumber,
-                  address: req.body.address,
-                  password: Helper.hashPassword(req.body.password),
-                  role: req.body.role,
-                  status: req.body.status,
-                  deleted: req.body.deleted,
-                  affirmation: req.body.affirmation,
-                  licensingState: req.body.licensingState,
-                  licenseNumber: req.body.licenseNumber,
-                  licenseLink: req.body.licenseLink,
-                  licenseReview: req.body.licenseReview,
-                  serviceProviding: req.body.serviceProviding,
-                  genderApplies: req.body.genderApplies,
-                  languages: req.body.languages,
-  
-                  photo : req.file.path,
-  
-                  designations: req.body.designations,
-                  specialities: req.body.specialities,
-                  aboutMe: req.body.aboutMe,
-                  personalQuote: req.body.personalQuote,
-                  practiceYears: req.body.practiceYears,
-                  attendedSchool: req.body.attendedSchool,
-                  graduatedYear: req.body.graduatedYear,
-                  howYouhearAboutUs: req.body.howYouhearAboutUs,
-                  fcmToken : req.body.fcmToken               
-             });
-                // let mailTransport = nodemailer.createTransport({
-                //   service : 'gmail',
-                //   auth :{
-                //     user : 'edwy23@gmail.com',
-                //     pass : '***********'
-                //   }
-                // });
-  
-                // let mailDetails = {
-                //   from : 'edwy23@gmail.com',
-                //   to : req.body.email,
-                //   subject : 'Registration Success mail',
-                //   text : ' You successfully registered to Etherapthy Pro'
-                // }
-  
-                counselor.save((error, response) => {
-                  if (error) {
-                    res.send({ 
-                      data: {}, 
-                      error: error.message, 
-                      message: "date save error : username or email already taken"
-                     }).status(500);
-                  }
-                  else {
-                    const token = Helper.generateregisterationToken(response.id);
-                    let data = {
-                      response,
-                      token
-                    }
-                    // mailTransport.sendMail(mailDetails, (error, response) =>{
-                    //   if(error){
-                    //     res.send({data : {}, success : false, error, message :'Error in mail send in user registration'});
-                    //   }
-                    //   else{
-                    //     res.send({data: data, success: true, message: "Counselor Registered and mail send to registered email"});
-                    //   }
-                    // });
-                    res.send({data});
-                  }
-                })
-              }
-              else {
-                return res.send({ data: {}, success: false, message: "username or email already taken" }).status(402);
-              }
-            })
-            .catch(error => {
-              res.send({ error: error, message: "required field/s missing" }).status(500);
-            })
-        }
-        catch (error) {
-          res.send({ error: error.message, message: "Error while registration" }).status(500);
-        }
-      }
-    })
+  const fileFilter = (req, file, cb) => {
+    if (file.mimetype == 'image/jpeg' || file.mimetype == 'image/png' || file.mimetype == 'image/jpg') {
+      cb(null, true);
+    } else {
+      cb(null, false);
+    }
   }
+
+  const upload = multer({ storage: storage, fileFilter: fileFilter }).single('photo');
+  upload(req, res, (err) => {
+    if (err) {
+      console.log(err);
+      res.send({ error: err, success: false, message: "file upload error" })
+    }
+    else {
+      try {
+        // check if all field is available
+        //   const { username, email, password } = req.body;
+        //   if (!username || !email || !password) {
+        //     return res.send({data : {}, error: "username or email or password is missing", success : false }).status(400);
+        //   }
+
+        // check if user exist
+        Counselor.findOne({ $and: [{ email: req.body.email, username: req.body.username }] })
+          .then(counselor => {
+            if (!counselor) {
+              const counselor = new Counselor({
+                firstName: req.body.firstName,
+                lastName: req.body.lastName,
+                userName: req.body.userName,
+                email: req.body.email,
+                mobileNumber: req.body.mobileNumber,
+                address: req.body.address,
+                password: Helper.hashPassword(req.body.password),
+                role: req.body.role,
+                status: req.body.status,
+                deleted: req.body.deleted,
+                affirmation: req.body.affirmation,
+                licensingState: req.body.licensingState,
+                licenseNumber: req.body.licenseNumber,
+                licenseLink: req.body.licenseLink,
+                licenseReview: req.body.licenseReview,
+                serviceProviding: req.body.serviceProviding,
+                genderApplies: req.body.genderApplies,
+                languages: req.body.languages,
+
+                photo: req.file.path,
+
+                designations: req.body.designations,
+                specialities: req.body.specialities,
+                aboutMe: req.body.aboutMe,
+                personalQuote: req.body.personalQuote,
+                practiceYears: req.body.practiceYears,
+                attendedSchool: req.body.attendedSchool,
+                graduatedYear: req.body.graduatedYear,
+                howYouhearAboutUs: req.body.howYouhearAboutUs,
+                fcmToken: req.body.fcmToken
+              });
+              // let mailTransport = nodemailer.createTransport({
+              //   service : 'gmail',
+              //   auth :{
+              //     user : 'edwy23@gmail.com',
+              //     pass : '***********'
+              //   }
+              // });
+
+              // let mailDetails = {
+              //   from : 'edwy23@gmail.com',
+              //   to : req.body.email,
+              //   subject : 'Registration Success mail',
+              //   text : ' You successfully registered to Etherapthy Pro'
+              // }
+
+              counselor.save((error, response) => {
+                if (error) {
+                  res.send({
+                    data: {},
+                    error: error.message,
+                    message: "date save error : username or email already taken"
+                  }).status(500);
+                }
+                else {
+                  const token = Helper.generateregisterationToken(response.id);
+                  let data = {
+                    response,
+                    token
+                  }
+                  // mailTransport.sendMail(mailDetails, (error, response) =>{
+                  //   if(error){
+                  //     res.send({data : {}, success : false, error, message :'Error in mail send in user registration'});
+                  //   }
+                  //   else{
+                  //     res.send({data: data, success: true, message: "Counselor Registered and mail send to registered email"});
+                  //   }
+                  // });
+                  res.send({ data });
+                }
+              })
+            }
+            else {
+              return res.send({ data: {}, success: false, message: "username or email already taken" }).status(402);
+            }
+          })
+          .catch(error => {
+            res.send({ error: error, message: "required field/s missing" }).status(500);
+          })
+      }
+      catch (error) {
+        res.send({ error: error.message, message: "Error while registration" }).status(500);
+      }
+    }
+  })
+}
 
 
 // Counselor login
@@ -250,6 +254,52 @@ module.exports.introMessage = async (req, res) =>{
     res.send({error, success : false, message : "unknown error"});
   }
 }
+
+// upload document 
+
+module.exports.uploadDocument = (req, res) =>{
+  try {
+    let fileSize = 1.5 * 1024 * 1024;
+    const fileFilter = (req, file, cb) => {
+      if (file.mimetype == 'application/pdf' || file.mimetype == 'application/msword'
+      || file.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') 
+      {
+        cb(null, true);
+      }
+      else {
+        cb(new Error('only pdf/docx/doc files are allowed'));
+      }
+    }
+    const upload = multer({
+      storage : storage, 
+      fileFilter : fileFilter,
+    limits : {fileSize : fileSize}}).single('file');
+
+    upload(req, res, (error) =>{
+      console.log("req.body: ", req.file);
+      if(error){
+        res.send({error, success : false, message : "only pdf/doc/docx files are allowed"});
+      }
+      else{
+        console.log(req.file);
+        let {userId} = jwt.decode(req.params.token);
+        Counselor.findOneAndUpdate({_id : userId}, {$push : {
+          files : req.file.path
+        }})
+        .then(data =>{
+          res.send({data, success : true, message : "file upload success"});
+        })
+        .catch(error =>{
+          res.send({error, success : false, message : "DB error : file data save error"});
+        })
+      }
+    })
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "error in file upload"});
+  }
+}
+
 
 
 // upload intro video
@@ -358,7 +408,7 @@ module.exports.addWeeklyAvailability = async (req, res) => {
         day: day,
         status: 'active',
         slot: timeSlot.map((time, index, array) => {
-          if (array[index + 1] !== undefined) return { status: 0, time: time };
+          if (array[index + 1] !== undefined) return { status: 0, time: time + "-" + array[index + 1] };
         })
           .filter((time) => {
             return time !== undefined;
@@ -597,7 +647,7 @@ module.exports.todayPlan = async (req, res) =>{
 
 
 
-
+// disable particular slots for a/multiple date
 module.exports.disableSlotsByTime = async (req, res) => {
   try {
     const date = new Date(req.body.date).toString().substring(0,15);
@@ -896,5 +946,47 @@ module.exports.changePassword = (req, res) => {
   }
   catch (error) {
     res.send({error : error.message,success : false, message : 'Unknown error in reset password'}).status(500);
+  }
+}
+
+
+
+
+//edit profile section
+
+module.exports.editProfile = async (req, res) => {
+  try {
+    // let { userId } = jwt.decode(req.params.token);
+    let userId = req.params.token;
+    await Counselor.findById(userId)
+      .then(counselor => {
+        Counselor.findOneAndUpdate({ _id: userId }, [
+          {
+            $set: {
+              nickName: req.body.nickName ? req.body.nickName : "",
+              aboutMe : req.body.aboutMe ? req.body.aboutMe : counselor.aboutMe,
+              practiceYears : req.body.practiceYears ? req.body.practiceYears : counselor.practiceYears,
+              attendedSchool : req.body.attendedSchool ? req.body.attendedSchool : counselor.attendedSchool,
+              graduatedYear : req.body.graduatedYear ? req.body.graduatedYear : counselor.graduatedYear,
+              licenseNumber : req.body.licenseNumber ? req.body.licenseNumber : counselor.licenseNumber,
+              state : req.body.state ? req.body.state : "",
+              specialities : req.body.specialities ? req.body.specialities : counselor.specialities,
+              designations : req.body.designations ? req.body.designations : counselor.designations,
+            }
+          }
+        ])
+        .then(doc =>{
+          res.send({data : doc, success : true, message : "details updated"});
+        })
+        .catch(error =>{
+          res.send({error, success : false , message : "DB error: profile update error"});
+        })
+      })
+      .catch(error => {
+        res.send({ error, success: false, message: "DB error: counselor details fetch error" });
+      })
+  }
+  catch (error) {
+    res.send({ error, success: false, message: "Unknown error" });
   }
 }
