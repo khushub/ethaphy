@@ -391,7 +391,7 @@ module.exports.addWeeklyAvailability = async (req, res) => {
             if(days[i.getDay()] === availability[j].day){
               arrayOfUpcoming[k] = {
                 day : availability[j].day,
-                date : i.toISOString(),
+                date : i.toDateString(),
                 status : 'active',
                 slot : availability[j].slot
               }
@@ -434,72 +434,73 @@ module.exports.addWeeklyAvailability = async (req, res) => {
 
 
 
-module.exports.setUpcomingSlots = async (req, res) => {
+module.exports.filterByDate = async (req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token);
     // let userId = req.params.token;
 
     let startDate = new Date(req.body.startDate);
     let endDate = new Date(req.body.endDate);
-    
-    const days = ["Sun","Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
     const weekAvailability = await Slot.findOne({ counselorId: userId });
     const availability = weekAvailability.availability;
 
     if (!weekAvailability) {
-      res.send({ data: {}, success: false, message: "You need to set your weekly availabilit" });
+      res.send({ data: {}, success: false, message: "You need to set your weekly availability" });
     }
     else {
-      if (startDate.toDateString() == endDate.toDateString()) {
-        for(let i = startDate; i < endDate; i.setDate(i.getDate() + 1)){
-          console.log(i);
-        }
+      if (startDate.toLocaleDateString() == endDate.toLocaleDateString()) {
         const slotDB = new UpcomingSlots({
-          counselorId : userId,
-          availability : availability
+          counselorId: userId,
+          availability: availability
         });
 
-        // await UpcomingSlots.find({ date: startDate })
-        //   .then(doc => {
-        //     res.send({ data: doc, success: true, message: "slot fetched" });
-        //   })
-        //   .catch(error => {
-        //     res.send({ error, success: false, message: "DB error: for same date" });
-        //   })
+        await UpcomingSlots.find({counselorId : userId })
+          .then(data => {
+            data[0].availability = data[0].availability.filter(slot =>{
+              // console.log(new Date(slot.date).toLocaleDateString(), "     ", new Date().toLocaleDateString());
+              return new Date(slot.date).toLocaleDateString() === startDate.toLocaleDateString();
+            })
+            res.send({ data:  data[0].availability, success: true, message: "slot fetched" });
+          })
+          .catch(error => {
+            res.send({ error, success: false, message: "DB error: for same date" });
+          })
       }
       else {
         let finalArray = [];
-        for(let i = startDate, k=0; i<= endDate; i.setDate(i.getDate()+1)){
-          console.log("date is: ",i.toLocaleDateString() ,days[i.getDay()]);
+        for (let i = startDate, k = 0; i <= endDate; i.setDate(i.getDate() + 1)) {
+          console.log("date is: ", i.toLocaleDateString(), days[i.getDay()]);
 
-          for(let j = 0; j < availability.length; j++){
+          for (let j = 0; j < availability.length; j++) {
             // console.log("available day: ", availability[j].day);
-            if(days[i.getDay()] === availability[j].day){
+            if (days[i.getDay()] === availability[j].day) {
               console.log("in if count: ");
               finalArray[k] = {
-                day : availability[j].day,
-                date : i.toDateString(),
-                status : 'active',
-                slot : availability[j].slot
+                day: availability[j].day,
+                date: i.toDateString(),
+                status: 'active',
+                slot: availability[j].slot
               }
               k++;
             }
           }
         }
-        console.log(finalArray);
+        // console.log(finalArray);
         const slotDB = new UpcomingSlots({
-          counselorId : userId,
-          availability : finalArray
+          counselorId: userId,
+          availability: finalArray
         });
         await slotDB.save()
-        .then(doc =>{
-          res.send({doc});
-        })
-        .catch(error =>{
-          res.send({error});
-        })
-      } 
+          .then(doc => {
+            res.send({ doc });
+          })
+          .catch(error => {
+            res.send({ error });
+          })
+      }
     }
 
   }
@@ -509,48 +510,57 @@ module.exports.setUpcomingSlots = async (req, res) => {
 }
 
 
+// get upcoming slot from today onwards
+
 module.exports.getUpcomingSlots = async (req,res)=>{
   try {
     let { userId } = jwt.decode(req.params.token);
-    let startDate = new Date();
-    console.log("start date: ", startDate.toISOString());
-    await UpcomingSlots.find({counselorId : userId})
+    await UpcomingSlots.findOne({counselorId : userId})
     .then(data =>{
       data[0].availability = data[0].availability.filter(slot =>{
-        return slot.date >= new Date().toISOString()
+        // console.log(new Date(slot.date).toLocaleDateString(), "     ", new Date().toLocaleDateString());
+        return new Date(slot.date).toLocaleDateString() >= new Date().toLocaleDateString();
       })
-      res.send({data : data[0].availability});
+      res.send({data : data[0].availability, success : true, message : "slot fetched from today onwards"});
     })
     .catch(error =>{
       res.send({error, success : false, message : "DB error: upcoming slot fetch"});
     })
   } 
   catch (error) {
-   res.send({error, success : false, message : "error in upcoming slot fetch"}) ;
+   res.send({error, success : false, message : "error in upcoming slot fetch"});
   }
 }
 
-
-module.exports.getAllSlots = (req, res) =>{
+// get all upcoming booking from today onwards
+module.exports.forCalendar = async (req, res) =>{
   try {
     let {userId} = jwt.decode(req.params.token);
-    Slot.find({counselorId : userId}, (error, doc) =>{
-      if(error){
-        res.send({error : error, success : false, message : "DB error"});
-      }
-      else{
-        if(!doc){
-          res.send({data : {}, success : false, message : "no data found: No data in DB or incorrect token"});
-        }
-        else{
-          let slots = [];
-          for(let i=0; i<doc.length;i++){
-            slots[i] = doc[i].slot;
+    console.log("userid: ", userId);
+    let data = [];
+    let date = new Date().toISOString().substring(0,10);
+    console.log("date: ", date);
+    await CounselorToUser.find({counselorId : userId, date : {$gte : date}})
+    .then(async doc =>{
+      console.log(doc.length);
+      for(let i=0; i < doc.length; i++){
+        await userModel.findById(doc[i].userId)
+        .then(async user =>{
+          // console.log("user: ", user.username, doc[i].date);
+          data[i] = {
+            name :  user.username,
+            date : doc[i].date,
+            slots : doc[i].slots
           }
-          
-          res.send({slots, success : true, message : "got all data"});
-        }
+        })
+        .catch(error =>{
+          res.send({error, success : false, message : "user details fetch error"});
+        })
       }
+      res.send({data , success : true, message : "All slot fetch for a user"});
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "DB error: for all slot fetch"});
     })
   }
    catch (error) {
@@ -559,15 +569,58 @@ module.exports.getAllSlots = (req, res) =>{
 }
 
 
-module.exports.disableSlotsByTime = (req, res) => {
+// get counselor's plan of today
+
+module.exports.todayPlan = async (req, res) =>{
   try {
-    const daysArray = req.body.days;
-    const slotsArray = req.body.slots;
+    let { userId }  = jwt.decode(req.params.token);
+    // let userId = req.params.token;
+    let date = req.body.date;
+    await CounselorToUser.find({$and : [{counselorId : userId}, {date : date}]})
+    .then(doc =>{
+      if(doc.length == 0){
+        res.send({data : doc, success : false, message : 'no data found'});
+      }
+      else{
+        res.send({data : doc, success : true, message : 'plan fetch for today'});
+      }
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : 'DB error: today plan fetch error'});
+    })
+  } 
+  catch (error) {
+    res.send({error, success : false, message : 'unknown error'});
+  }
+}
+
+
+
+
+
+module.exports.disableSlotsByTime = async (req, res) => {
+  try {
+    const date = new Date(req.body.date).toString().substring(0,15);
+    const slot = req.body.slot;
+    let status = req.body.status;
     let { userId } = jwt.decode(req.params.token);
-    slotsArray.forEach(slot => {
-      console.log("slot: ",slot);
-      res.send({slot});
-    });
+    console.log("userid: ", userId, date);
+    UpcomingSlots.find({counselorId : userId})
+    .then(doc=>{
+      for(let i=0; i < doc[0].availability.length; i++){
+
+        if(doc[0].availability[i].date === date){
+          console.log(doc[0].availability[i].slot)
+          for(let j=0; j < doc[0].availability[i].slot.length; j++ ){
+            console.log(slot);
+          }
+        }
+      }
+      res.send({data : doc[0].availability});
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "DB error: in slot disable"});
+    })
   }
   catch (error) {
     res.send({ error: error, success: false, message: "Invalid request : something is wrong with request" });
@@ -575,28 +628,25 @@ module.exports.disableSlotsByTime = (req, res) => {
 }
 
 
-module.exports.disableSlotsByDate = (req, res) => {
+
+// disable slots for an entire day
+
+module.exports.disableSlotsByDate = async (req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token);
-    let date = new Date(req.body.date);
-    Slot.findOneAndUpdate({ $and: [{ counselorId: userId }, { date: date }] },
-      { $set: { status: 'inactive' } },
-      { new: true },
-      (error, doc) => {
-        if (error) {
-          console.log(`error in DB: ${error}`);
-          res.send({ error: error, success: false, message: "DB error" });
-        }
-        else {
-          if (!doc) {
-            console.log("no data found");
-            res.send({ data: {}, success: false, message: "no data found" });
-          }
-          else {
-            // console.log("status disabled of this date", doc);
-            res.send({ data: doc, success: true, message: "time slot disabled for a day" });
-          }
-        }
+    // let userId = req.params.token;
+    let date = new Date(req.body.date).toString().substring(0, 15);
+    console.log("date is: ",date, " userId: ",userId);
+    await UpcomingSlots.findOneAndUpdate(
+      {counselorId : userId, "availability.date" : date},
+      {$set : {"availability.$.status" : 'inactive'}},
+      {new : true}
+      )
+      .then(doc =>{
+        res.send({doc, success : true, message : "slot disable for specified date"});
+      })
+      .catch(error =>{
+        res.send({error, success : false, message : "DB error: in slot disable for a date"});
       })
   }
   catch (error) {
@@ -726,7 +776,7 @@ module.exports.forgotPassword = async (req, res) => {
           service: 'gmail',
           auth: {
             user: 'rahul.168607@knit.ac.in',
-            pass: '8126123782'
+            pass: '*********'
           }
         });
 
@@ -848,190 +898,3 @@ module.exports.changePassword = (req, res) => {
     res.send({error : error.message,success : false, message : 'Unknown error in reset password'}).status(500);
   }
 }
-
-
-
-
-
-
-
-
-
- // Do scheduling here
-
-//  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-//  let from_time = req.body.from_time;
-//  let to_time = req.body.to_time;
-//  let day = days[new Date(from_time).getDay()-1];
-//  console.log("day is : ",day);
-
-
-//  // check if start_time exceed end_time
-
-//  if (new Date(from_time).getTime() < new Date(to_time).getTime()) {
-  //  let date = new Date(from_time);
-  //  // console.log("date: ",date.toTimeString().substring(0,5));
-
-  //  // do sloting here
-  //  let slot = [];
-  //  let timeSlot = [];
-  //  let i = 0;
-  //  let compareTime = date.getTime();
-  //  // console.log("date: ",date, "  slot: ",slot, "  compare time: ", compareTime);
-
-  //  while (new Date(to_time).getTime() >= compareTime) {
-  //    slot[i] = date.setMinutes(date.getMinutes() + 30);
-
-  //    // formatting unix time_stamp to date_time 
-  //    let dt = new Date(compareTime);
-  //    compareTime = slot[i];
-  //    // let months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-  //    let time = dt.getHours() + ':' + dt.getMinutes();
-  //    timeSlot[i] = time;
-  //    i++;
-  //  }
-
-  //  // inserting slot timing in DB
-  //  let { userId } = jwt.decode(req.params.token);
-  //  const slotDB = new Slot({
-  //    counselorId: userId,
-  //    date: date.toDateString(),
-  //    slot: timeSlot.map((time, index, array) => {
-  //             if (array[index + 1] !== undefined) 
-  //              return { status: 0, time: time.substring(0, 5) + "-" + array[index + 1] };
-  //             })
-  //             .filter((time) => {
-  //                return time !== undefined;
-  //             })
-  //          });
-  //    slotDB.save()
-  //    .then(response => {
-  //      // console.log("response", response);
-  //      // res.send({data : response, success : true, message : "time slot added"});
-  //      res.send({ data: timeSlot, message: "testing" });
-  //    })
-  //    .catch(error => {
-  //      console.log("error", error);
-  //      res.send({ error: error, success: false, message: "error at sloting" });
-  //    })
-//  }
-//  else {
-//    if (new Date(from_time).getTime() > new Date(to_time).getTime()) {
-//      console.log("start time must not exceed end time");
-//    }
-//    else {
-//      console.log("Both start and end time are same");
-//    }
-//  }
-
-
-
-
-
-
-// module.exports.createCounselor = async function (req, res) {
-//   upload(req, res, (err) => {
-//     if (err) {
-//       console.log(err);
-//       res.send({error : err, success : false, message : "file upload error"})
-//     }
-//     else {
-//       try {
-//         // check if all field is available
-//         //   const { username, email, password } = req.body;
-//         //   if (!username || !email || !password) {
-//         //     return res.send({data : {}, error: "username or email or password is missing", success : false }).status(400);
-//         //   }
-
-//         // check if user exist
-//          Counselor.findOne({ $and: [{ email: req.body.email, username: req.body.username }] })
-//           .then(counselor => {
-//             console.log("counselor in then: ", counselor);
-//             if (!counselor) {
-//               const counselor = new Counselor({
-//                 firstName: req.body.firstName,
-//                 lastName: req.body.lastName,
-//                 userName: req.body.userName,
-//                 email: req.body.email,
-//                 mobileNumber: req.body.mobileNumber,
-//                 address: req.body.address,
-//                 password: Helper.hashPassword(req.body.password),
-//                 role: req.body.role,
-//                 status: req.body.status,
-//                 deleted: req.body.deleted,
-//                 affirmation: req.body.affirmation,
-//                 licensingState: req.body.licensingState,
-//                 licenseNumber: req.body.licenseNumber,
-//                 licenseLink: req.body.licenseLink,
-//                 licenseReview: req.body.licenseReview,
-//                 serviceProviding: req.body.serviceProviding,
-//                 genderApplies: req.body.genderApplies,
-//                 languages: req.body.languages,
-
-//                 photo : req.file.path,
-
-//                 designations: req.body.designations,
-//                 specialities: req.body.specialities,
-//                 aboutMe: req.body.aboutMe,
-//                 personalQuote: req.body.personalQuote,
-//                 practiceYears: req.body.practiceYears,
-//                 attendedSchool: req.body.attendedSchool,
-//                 graduatedYear: req.body.graduatedYear,
-//                 howYouhearAboutUs: req.body.howYouhearAboutUs,
-//                 fcmToken : req.body.fcmToken 
-//               });
-
-//               // let mailTransport = nodemailer.createTransport({
-//               //   service : 'gmail',
-//               //   auth :{
-//               //     user : 'edwy23@gmail.com',
-//               //     pass : '***********'
-//               //   }
-//               // });
-
-//               // let mailDetails = {
-//               //   from : 'edwy23@gmail.com',
-//               //   to : req.body.email,
-//               //   subject : 'Registration Success mail',
-//               //   text : ' You successfully registered to Etherapthy Pro'
-//               // }
-
-//               counselor.save((error, response) => {
-//                 if (error) {
-//                   res.send({ data: {}, error: error.message, message: "username or email already taken in save" }).status(500);
-//                 }
-//                 else {
-//                   const token = Helper.generateregisterationToken(response.id);
-//                   let data = {
-//                     response,
-//                     token
-//                   }
-//                   // mailTransport.sendMail(mailDetails, (error, response) =>{
-//                   //   if(error){
-//                   //     res.send({data : {}, success : false, error, message :'Error in mail send in user registration'});
-//                   //   }
-//                   //   else{
-//                   //     res.send({data: data, success: true, message: "Counselor Registered and mail send to registered email"});
-//                   //   }
-//                   // });
-//                   res.send({data});
-//                 }
-//               })
-//             }
-//             else {
-//               return res.send({ data: {}, success: false, message: "username or email already taken" }).status(402);
-//             }
-//           })
-//           .catch(error => {
-//             res.send({ error: error, message: "required field/s missing" }).status(500);
-//           })
-//       }
-//       catch (error) {
-//         res.send({ error: error.message, message: "Error while registration" }).status(500);
-//       }
-//     }
-//   })
-// }
-

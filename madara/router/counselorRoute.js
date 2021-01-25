@@ -15,13 +15,15 @@ router.get('/myProfile/:token', counselorHandler.getCounselor);
 
 router.put('/changePassword/:token', counselorHandler.changePassword);
 
-router.post('/setUpcomingSlots/:token', counselorHandler.setUpcomingSlots);
+router.post('/filterByDate/:token', counselorHandler.filterByDate);
 
 router.post('/weeklyAvailability/:token', counselorHandler.addWeeklyAvailability);
 
 router.get('/getUpcomingSlots/:token', counselorHandler.getUpcomingSlots);
 
-router.get('/getAllSlots/:token', counselorHandler.getAllSlots);
+router.get('/getBookingsForCal/:token', counselorHandler.forCalendar);
+
+router.post('/todayPlan/:token', counselorHandler.todayPlan)
 
 router.put('/disableSlotsByTime/:token', counselorHandler.disableSlotsByTime);
 

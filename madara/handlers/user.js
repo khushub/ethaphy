@@ -14,7 +14,7 @@ const Question = require('../models/questionModel');
 const OTP = require('../models/otpModel');
 const CounselorToUser = require('../models/counselorToUser');
 const Counselor = require('../models/counselorModel');
-const Slots = require('../models/slotModel');
+const UpcomingSlots = require('../models/upcomingAvailability');
 const Chat = require('../models/chatModel');
 
 
@@ -1120,7 +1120,7 @@ module.exports.bookSlots = async (req, res) => {
         description: 'One time payment ',
       })
       .then(async (charge) =>{
-        console.log("cahger: ", charge);
+        console.log("charge: ", charge);
         const slotData = new CounselorToUser({
           counselorId: req.body.counselorId,
           userId: userId,
@@ -1187,24 +1187,52 @@ module.exports.bookSlots = async (req, res) => {
 
 
 
-// user will get enable slots of a counselor
-module.exports.getEnableSlots = async (req, res) =>{
+// user will get all upcoming active slots of a counselor
+module.exports.getActiveSlots = async (req, res) =>{
   try {
     let counselorId = req.body.counselorId;
-    let slots = await Slots.find({counselorId : counselorId, date : req.body.date});
-    let enableSlots = [];
-    if(slots[0].status === 'active'){
-      for(let i=0, j=0; i < slots[0].slot.length; i++){
-        if(slots[0].slot[i].status === 0){
-          enableSlots[j] = slots[0].slot[i].time;
-          j++;
-        }
-      }  
-    }
-    res.send({data: enableSlots, success : true, message : "data fetched"});
+    console.log("counselorId: ", counselorId);
+    await UpcomingSlots.find({counselorId : counselorId})
+    .then(async (data) =>{
+      let availability =  data[0].availability;
+      availability = await availability.filter(day =>{
+        return day.status === 'active'
+      });
+      availability = availability.map(day =>{
+        let slot = day.slot.filter(slots =>{
+          return slots.status == 0;
+        })
+        return {day : day.day, date : day.date, status : day.status, slot : slot}
+      })
+      res.send({data : availability, success : true, message : "slot fetched"});;
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "DB error: slot fetch error"});
+    })
   }
    catch (error) {
     res.send({data : [],success : false, message: "data fetch error", error});
+  }
+}
+
+
+
+
+// get active slot for a specific date
+
+module.exports.getActiveSlotByDate = async (req, res) =>{
+  try {
+    let counselorId = req.body.counselorId;
+    let date = new Date(req.body.date).toDateString();
+    console.log("date is: ", date);
+    const slots = await UpcomingSlots.find(
+      {counselorId : counselorId},
+      {availability : {$elemMatch : {date : date}}}
+      );
+    res.send({slots});
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "unknown error: get slots for a date"});
   }
 }
 

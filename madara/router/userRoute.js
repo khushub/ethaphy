@@ -40,7 +40,9 @@ router.post('/pastInvoices',userHandler.getPastInvoices);
 
 // Scheduling related routes
 
-router.post('/getEnableSlots', userHandler.getEnableSlots);
+router.post('/getActiveSlots', userHandler.getActiveSlots);
+
+router.post('/getActiveSlotsByDate', userHandler.getActiveSlotByDate);
 
 router.post('/bookSlots/:token', userHandler.bookSlots);
 
