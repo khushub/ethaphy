@@ -284,8 +284,11 @@ module.exports.uploadDocument = (req, res) =>{
         console.log(req.file);
         let {userId} = jwt.decode(req.params.token);
         Counselor.findOneAndUpdate({_id : userId}, {$push : {
-          files : req.file.path
-        }})
+          files : {
+            url : req.file.path,
+            type : req.body.type
+          }
+        }}, {new : true})
         .then(data =>{
           res.send({data, success : true, message : "file upload success"});
         })
@@ -651,22 +654,14 @@ module.exports.todayPlan = async (req, res) =>{
 module.exports.disableSlotsByTime = async (req, res) => {
   try {
     const date = new Date(req.body.date).toString().substring(0,15);
-    const slot = req.body.slot;
-    let status = req.body.status;
+    const timeSlot = req.body.slot;
     let { userId } = jwt.decode(req.params.token);
     console.log("userid: ", userId, date);
-    UpcomingSlots.find({counselorId : userId})
+    await UpcomingSlots.updateOne({counselorId : userId},
+                              {$set : {'availability.$[a].slot.$[s].status' : 1}},
+                              {arrayFilters : [{'a.date' : date}, {'s.time' : timeSlot}]}) 
     .then(doc=>{
-      for(let i=0; i < doc[0].availability.length; i++){
-
-        if(doc[0].availability[i].date === date){
-          console.log(doc[0].availability[i].slot)
-          for(let j=0; j < doc[0].availability[i].slot.length; j++ ){
-            console.log(slot);
-          }
-        }
-      }
-      res.send({data : doc[0].availability});
+      res.send({data : doc, success : true, message : 'slot disabled'});
     })
     .catch(error =>{
       res.send({error, success : false, message : "DB error: in slot disable"});
@@ -956,8 +951,8 @@ module.exports.changePassword = (req, res) => {
 
 module.exports.editProfile = async (req, res) => {
   try {
-    // let { userId } = jwt.decode(req.params.token);
-    let userId = req.params.token;
+    let { userId } = jwt.decode(req.params.token);
+    // let userId = req.params.token;
     await Counselor.findById(userId)
       .then(counselor => {
         Counselor.findOneAndUpdate({ _id: userId }, [

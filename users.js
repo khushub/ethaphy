@@ -52,6 +52,16 @@ const serviceAccount = require('./privateKey.json');
 
 app.use(device.capture());
 app.use(cors());
+// app.use((req, res, next) => {
+// 	res.header("Access-Control-Allow-Origin: *");
+// 	res.header('Access-Control-Allow-Origin: *');
+// 	res.header('Access-Control-Allow-Methods','GET, POST, OPTIONS, PUT, PATCH, DELETE');
+// 	res.header('Access-Control-Allow-Headers: *');
+// 	res.header('Access-Control-Max-Age: 1728000');
+// 	res.header("Content-Length: 0");
+// 	res.header("Content-Type: text/plain");
+// 	next();
+// })
 app.use(express.urlencoded({extended : false}));
 app.use(bodyParser.urlencoded({ extended: true }));
 var dir = path.join(__dirname, 'uploads');
