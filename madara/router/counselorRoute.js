@@ -33,7 +33,7 @@ router.put('/disableSlotsByDate/:token', counselorHandler.disableSlotsByDate);
 
 
 // dashboard
-router.post('/todayPlan/:token', counselorHandler.todayPlan)
+router.get('/todayPlan/:token', counselorHandler.todayPlan)
 
 router.get('/potential/:token', counselorHandler.potential);
 

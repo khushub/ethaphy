@@ -277,13 +277,13 @@ module.exports.forgotPassword = async (req, res) => {
         let mailTransport = await nodemailer.createTransport({
           service: 'gmail',
           auth: {
-            user: 'rahul.168607@knit.ac.in',
-            pass: '8126123782'
+            user: 'jfrandz85@gmail.com',
+            pass: 'Jackson@123'
           }
         });
 
         let mailDetails = {
-          from: 'rahul.168607@knit.ac.in',
+          from: 'jfrandz85@gmail.com',
           to: email,
           subject: 'Test mail',
           text: otp.toString()

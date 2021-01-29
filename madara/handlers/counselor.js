@@ -103,13 +103,13 @@ module.exports.createCounselor = async function (req, res) {
               // let mailTransport = nodemailer.createTransport({
               //   service : 'gmail',
               //   auth :{
-              //     user : 'edwy23@gmail.com',
-              //     pass : '***********'
+              //     user : 'jfrandz85@gmail.com',
+              //     pass : 'Jackson@123'
               //   }
               // });
 
               // let mailDetails = {
-              //   from : 'edwy23@gmail.com',
+              //   from : 'jfrandz85@gmail.com',
               //   to : req.body.email,
               //   subject : 'Registration Success mail',
               //   text : ' You successfully registered to Etherapthy Pro'
@@ -509,7 +509,6 @@ module.exports.filterByDate = async (req, res) => {
           counselorId: userId,
           availability: availability
         });
-
         await UpcomingSlots.find({counselorId : userId })
           .then(data => {
             data[0].availability = data[0].availability.filter(slot =>{
@@ -524,35 +523,66 @@ module.exports.filterByDate = async (req, res) => {
       }
       else {
         let finalArray = [];
-        for (let i = startDate, k = 0; i <= endDate; i.setDate(i.getDate() + 1)) {
-          console.log("date is: ", i.toLocaleDateString(), days[i.getDay()]);
-
-          for (let j = 0; j < availability.length; j++) {
-            // console.log("available day: ", availability[j].day);
-            if (days[i.getDay()] === availability[j].day) {
-              console.log("in if count: ");
-              finalArray[k] = {
-                day: availability[j].day,
-                date: i.toDateString(),
-                status: 'active',
-                slot: availability[j].slot
-              }
-              k++;
-            }
-          }
-        }
-        // console.log(finalArray);
-        const slotDB = new UpcomingSlots({
-          counselorId: userId,
-          availability: finalArray
-        });
-        await slotDB.save()
+        await UpcomingSlots.find({counselorId : userId})
           .then(doc => {
-            res.send({ doc });
+            let array = doc[0].availability;
+            console.log("arrayDate: ", new Date(array[array.length - 1].date).toISOString());
+            console.log("startDate: ", startDate);
+            if (new Date(array[array.length - 1].date).toISOString().substring(0, 10) < startDate.toISOString().substring(0, 10)) {
+              console.log("in if condition");
+              let i = new Date(array[array.length - 1].date).toISOString();
+              for (i; i <= endDate; i.setDate(i.getDate() + 1)) {
+                let k = 0;
+                console.log("date is: ", i.toLocaleDateString(), days[i.getDay()]);
+
+                for (let j = 0; j < availability.length; j++) {
+                  // console.log("available day: ", availability[j].day);
+                  if (days[i.getDay()] === availability[j].day) {
+                    console.log("in if count: ");
+                    finalArray[k] = {
+                      day: availability[j].day,
+                      date: i.toDateString(),
+                      status: 'active',
+                      slot: availability[j].slot
+                    }
+                    k++;
+                  }
+                }console.log("finalArray: ",finalArray);
+              }
+              
+            }
+            res.send({ startDate });
           })
-          .catch(error => {
-            res.send({ error });
-          })
+       
+        // for (let i = startDate, k = 0; i <= endDate; i.setDate(i.getDate() + 1)) {
+        //   console.log("date is: ", i.toLocaleDateString(), days[i.getDay()]);
+
+        //   for (let j = 0; j < availability.length; j++) {
+        //     // console.log("available day: ", availability[j].day);
+        //     if (days[i.getDay()] === availability[j].day) {
+        //       console.log("in if count: ");
+        //       finalArray[k] = {
+        //         day: availability[j].day,
+        //         date: i.toDateString(),
+        //         status: 'active',
+        //         slot: availability[j].slot
+        //       }
+        //       k++;
+        //     }
+        //   }
+        // }
+        // console.log(finalArray);
+        // const slotDB = new UpcomingSlots({
+        //   counselorId: userId,
+        //   availability: finalArray
+        // });
+        // await slotDB.save()
+        //   .then(doc => {
+        //     res.send({ doc });
+        //   })
+        //   .catch(error => {
+        //     res.send({ error });
+        //   })
       }
     }
 
@@ -628,14 +658,27 @@ module.exports.todayPlan = async (req, res) =>{
   try {
     let { userId }  = jwt.decode(req.params.token);
     // let userId = req.params.token;
-    let date = req.body.date;
+    let date = new Date().toISOString().substring(0,10);
+    console.log("date: ", date);
+    let data = [];
     await CounselorToUser.find({$and : [{counselorId : userId}, {date : date}]})
-    .then(doc =>{
+    .then(async doc =>{
       if(doc.length == 0){
         res.send({data : doc, success : false, message : 'no data found'});
       }
       else{
-        res.send({data : doc, success : true, message : 'plan fetch for today'});
+        for(let i =0; i<doc.length; i++){
+          await userModel.findById(doc[i].userId)
+          .then(user =>{
+            console.log("user: ", user);
+            data[i] = {
+              name : user.username,
+              date : doc[i].date,
+              slots : doc[i].slots
+            }
+          })
+        }
+        res.send({data, success : true, message : 'plan fetch for today'});
       }
     })
     .catch(error =>{
@@ -653,19 +696,30 @@ module.exports.todayPlan = async (req, res) =>{
 // disable particular slots for a/multiple date
 module.exports.disableSlotsByTime = async (req, res) => {
   try {
-    const date = new Date(req.body.date).toString().substring(0,15);
+    const date = new Date(req.body.date).toString().substring(0, 15);
     const timeSlot = req.body.slot;
     let { userId } = jwt.decode(req.params.token);
     console.log("userid: ", userId, date);
-    await UpcomingSlots.updateOne({counselorId : userId},
-                              {$set : {'availability.$[a].slot.$[s].status' : 1}},
-                              {arrayFilters : [{'a.date' : date}, {'s.time' : timeSlot}]}) 
-    .then(doc=>{
-      res.send({data : doc, success : true, message : 'slot disabled'});
-    })
-    .catch(error =>{
-      res.send({error, success : false, message : "DB error: in slot disable"});
-    })
+    await UpcomingSlots.find({ counselorId: userId })
+      .then(async (doc) => {
+        let status;
+        doc[0].availability = await doc[0].availability.filter(doc => {
+          return doc.date === date;
+        });
+        status = await doc[0].availability[0].slot.filter(slots => {
+          return slots.time === timeSlot;
+        })
+        console.log("status: ", status[0].status);
+        await UpcomingSlots.updateOne({ counselorId: userId },
+          { $set: { 'availability.$[a].slot.$[s].status': status[0].status === 0 ? 1 : 0 } },
+          { arrayFilters: [{ 'a.date': date }, { 's.time': timeSlot }] })
+          .then(updatedDoc => {
+            res.send({ data: updatedDoc, success: true, message: 'slot disabled' });
+          })
+          .catch(error => {
+            res.send({ error, success: false, message: "DB error: in slot disable" });
+          })
+      })
   }
   catch (error) {
     res.send({ error: error, success: false, message: "Invalid request : something is wrong with request" });
@@ -681,17 +735,24 @@ module.exports.disableSlotsByDate = async (req, res) => {
     let { userId } = jwt.decode(req.params.token);
     // let userId = req.params.token;
     let date = new Date(req.body.date).toString().substring(0, 15);
-    console.log("date is: ",date, " userId: ",userId);
-    await UpcomingSlots.findOneAndUpdate(
-      {counselorId : userId, "availability.date" : date},
-      {$set : {"availability.$.status" : 'inactive'}},
-      {new : true}
-      )
-      .then(doc =>{
-        res.send({doc, success : true, message : "slot disable for specified date"});
-      })
-      .catch(error =>{
-        res.send({error, success : false, message : "DB error: in slot disable for a date"});
+    console.log("date is: ", date, " userId: ", userId);
+    await UpcomingSlots.find({ counselorId: userId })
+      .then(async doc => {
+        doc[0].availability = await doc[0].availability.filter(doc => {
+          return doc.date === date;
+        });
+        console.log(doc[0].availability[0].status);
+        await UpcomingSlots.findOneAndUpdate(
+          { counselorId: userId, "availability.date": date },
+          { $set: { "availability.$.status": doc[0].availability[0].status ==='active' ? 'inactive' : 'active'}},
+          { new: true }
+        )
+          .then(doc => {
+            res.send({ doc, success: true, message: "slot disable for specified date" });
+          })
+          .catch(error => {
+            res.send({ error, success: false, message: "DB error: in slot disable for a date" });
+          })
       })
   }
   catch (error) {
@@ -820,13 +881,13 @@ module.exports.forgotPassword = async (req, res) => {
         let mailTransport = await nodemailer.createTransport({
           service: 'gmail',
           auth: {
-            user: 'rahul.168607@knit.ac.in',
-            pass: '*********'
+            user: 'jfrandz85@gmail.com',
+            pass: 'Jackson@123'
           }
         });
 
         let mailDetails = {
-          from: 'rahul.168607@knit.ac.in',
+          from: 'jfrandz85@gmail.com',
           to: email,
           subject: 'Test mail',
           text: otp.toString()
