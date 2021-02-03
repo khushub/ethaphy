@@ -514,10 +514,10 @@ const storage = multer.diskStorage({
     if(file.mimetype == 'image/jpeg' || file.mimetype == 'image/png'|| file.mimetype == 'image/jpg'){
       cb(null,'./uploads/');
     }
-    if(file.mimetype == 'video/mp4'){
+    if(file.mimetype == 'video/mp4'|| file.mimetype == 'video/x-matroska'){
       cb(null,'./uploads/user/videos');
     }
-    if(file.mimetype == 'audio/mpeg'){
+    if(file.mimetype == 'audio/mpeg' || file.mimetype == 'audio/mp3'){
       cb(null,'./uploads/user/audios');
     }
     if(file.mimetype == 'application/pdf' || file.mimetype == 'text/plain'){
@@ -579,7 +579,8 @@ module.exports.audioVideoUpload = async (req, res) =>{
     console.log("req.file.mimetype: ", req.body);
     let fileSize = 20 * 1024 *1024;
     const fileFilter = (req, file, cb) => {
-      if (file.mimetype == 'video/mp4' || file.mimetype == 'audio/mpeg') {
+      if (file.mimetype == 'video/mp4' || file.mimetype == 'audio/mpeg' || 
+      req.file.mimetype === 'video/x-matroska' || file.mimetype == 'audio/mp3') {
         cb(null, true);
       } 
       else {
@@ -606,7 +607,7 @@ module.exports.audioVideoUpload = async (req, res) =>{
           joinId : req.body.joinId,
           message : req.file.mimetype === 'video/mp4' ? "video/" + req.file.filename :"audio/" + req.file.filename,
           fileupload : req.file.mimetype,
-          message_type : req.file.mimetype === 'video/mp4' ? "video" : "audio",
+          message_type : req.file.mimetype==='video/mp4'||req.file.mimetype==='video/x-matroska'  ? "video" : "audio",
           time : Date.now(),
           id : req.body.id
         });

@@ -3,6 +3,7 @@ var logger = require('log4js').getLogger();
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const _ = require('lodash');
 const Chat = require('../models/chatModel');
 
 // required model
@@ -789,6 +790,66 @@ module.exports.potential = async (req, res) =>{
 }
 
 
+
+// counselor inbox
+
+module.exports.inbox = (req, res) => {
+  try {
+    let { userId } = jwt.decode(req.params.token);
+    // let userId = req.params.token;
+    Chat.find({ counsellor_id: userId , message_type : "text"})
+      .then(async doc => {
+        if (doc.length == 0 || !doc) {
+          res.send({ data: {}, success: false, message: "no message found" });
+        }
+        else {
+          // console.log("doc: ", doc);
+          let array = _.uniqBy(doc, 'username');
+          for(let i=0; i< array.length; i++){
+            console.log(array[i].user_id);
+            await userModel.findOne({_id : array[i].user_id})
+            .then(user =>{
+              array[i] = array[i].toJSON();
+              array[i].status = user.status
+              console.log("user: ", array[i]);
+              // console.log(user.status);
+            })
+          }
+          res.send({ data: array, success: true, message: "inobx data fetched" });
+        }
+      })
+      .catch(error => {
+        res.send({ error, success: false, message: "DB error:  inbox data fetch" });
+      })
+  }
+  catch (error) {
+    res.send({ error, success: false, message: "unknown error" });
+  }
+}
+
+// take action against message 
+
+module.exports.action = (req, res) =>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    console.log("userid: ", userId);
+    Chat.findOneAndUpdate({_id : req.body.id, counsellor_id : userId}, {$set : {__v : req.body.status}}, {new : true})
+    .then(chat =>{
+      res.send({data : chat, success : true, message : "message status updated"});
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "DB error: message status update"});
+    })
+  } 
+  catch (error) {
+    res.send({error , success : false, message : "Unknown error"});
+  }
+}
+
+
+
+
+
 // accept a user
 
 module.exports.userAssignment = async (req, res) =>{
@@ -834,16 +895,16 @@ module.exports.userAssignment = async (req, res) =>{
 
 // get messages for a user
 
-module.exports.getMessages = async (req, res) => {
+module.exports.getMessages =  (req, res) => {
   try {
-    await userModel.findById(req.body.userId)
-      .then(async (user) => {
-        await Chat.findOne({ user_id: req.body.userId })
-          .then(async (thread) => {
+      userModel.findById(req.body.userId)
+      .then(user => {
+        Chat.findOne({ user_id: req.body.userId })
+          .then(thread => {
             let date = new Date().toISOString().substring(0, 10);
-            let slots = await CounselorToUser.find({ userId: req.body.userId, date: { $gte: date } })
+            let slots = CounselorToUser.find({ userId: req.body.userId, date: { $gte: date } })
             console.log("slot: ",  typeof slots);
-            let data = await thread.toJSON();
+            let data = thread.toJSON();
             data.status = user.status;
             slots = slots.map(slot =>{
               return {time  : slot.slots, date : slot.date };
@@ -868,10 +929,10 @@ module.exports.getMessages = async (req, res) => {
 
 // forgot password functionality
 
-module.exports.forgotPassword = async (req, res) => {
+module.exports.forgotPassword = (req, res) => {
   try {
     const email = req.body.email;
-    await Counselor.findOne({ email: email }, async (error, doc) => {
+    Counselor.findOne({ email: email }, async (error, doc) => {
       if (error || !doc) {
         res.send({ error: error, success: false, message: 'DB error: no counselor exists' });
       }
@@ -893,7 +954,7 @@ module.exports.forgotPassword = async (req, res) => {
           text: otp.toString()
         }
         console.log(" maildetails: ", mailDetails);
-        await mailTransport.sendMail(mailDetails, async (error, response)=>{
+        mailTransport.sendMail(mailDetails, async (error, response)=>{
           if(error || !response){
             res.send({error : error, success : false, message: "Error in mail send : OTP" });
           }

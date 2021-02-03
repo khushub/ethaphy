@@ -41,6 +41,10 @@ router.post('/acceptUser/:token', counselorHandler.userAssignment);
 
 router.post('/getMessages/:token', counselorHandler.getMessages);
 
+router.get('/inbox/:token', counselorHandler.inbox);
+
+router.put('/action/:token', counselorHandler.action);
+
 
 // update and file upload related routes
 
