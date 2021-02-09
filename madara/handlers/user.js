@@ -28,7 +28,7 @@ const counselorModel = require('../models/counselorModel');
 const stripe = Stripe(secretKey);
 
 
-module.exports.login = async function (req, res) {
+module.exports.login = async function (req, res, next) {
   try {
     const { username, password } = req.body;
     console.log(req.body);
@@ -140,7 +140,18 @@ module.exports.login = async function (req, res) {
                       })
                   })
                   .catch(error => {
-                    res.send({ error, success: false, message: "Stripe error: inovice detils fetch error" });
+                    const data = {
+                      userDetails,
+                      token,
+                      membership : {},
+                      slotData,
+                      thread
+                    }
+                    res.send({
+                      data,
+                      success: true,
+                      message: 'User login success'
+                    });
                   })
               }
             })
@@ -520,15 +531,20 @@ const storage = multer.diskStorage({
     if(file.mimetype == 'audio/mpeg' || file.mimetype == 'audio/mp3'){
       cb(null,'./uploads/user/audios');
     }
-    if(file.mimetype == 'application/pdf' || file.mimetype == 'text/plain'){
+    if(file.mimetype == 'application/pdf' || file.mimetype == 'image/jpeg' || 
+      file.mimetype == 'image/png'|| file.mimetype == 'image/jpg' ||  file.mimetype == 'application/msword' || 
+      file.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
       cb(null,'./uploads/user/attachment');
     }
   },
 
   filename: (req, file, cb) => {
-    let originalname = file.originalname;
-    let extension = originalname.split(".");
-    filename = Date.now() + "." + extension[extension.length - 1];
+  	console.log("file: ", req.file , " ", file);
+    // let originalname = file.originalname;
+    // let extension = originalname.split(".");
+    // filename = Date.now() + "." + extension[extension.length - 1];
+    filename = (file.mimetype === 'audio/mp3' || file.mimetype === 'audio/mpeg') ? file.originalname +'.mp3' : file.originalname +'.mp4'
+    console.log("filename: ", filename);
     cb(null, filename);
   },
 });
@@ -576,17 +592,22 @@ module.exports.profilePictureUpload = (req, res) => {
 
 module.exports.audioVideoUpload = async (req, res) =>{
   try {
-    console.log("req.file.mimetype: ", req.body);
     let fileSize = 20 * 1024 *1024;
     const fileFilter = (req, file, cb) => {
-      if (file.mimetype == 'video/mp4' || file.mimetype == 'audio/mpeg' || 
-      req.file.mimetype === 'video/x-matroska' || file.mimetype == 'audio/mp3') {
-        cb(null, true);
-      } 
-      else {
-          // cb(null, false);
-          return cb(new Error('only mp4 or mp3/mpeg files are allowed'));
-      }
+    	// console.log("file.mimetype: ", file);
+    	if(!file.mimetype || file.mimetype == undefined){
+    		res.send({success : false, message : "error: undefined file"});
+    	}
+      	else{
+      		if (file.mimetype == 'video/mp4' || file.mimetype == 'audio/mpeg' ||
+	       		file.mimetype === 'video/x-matroska' || file.mimetype == 'audio/mp3') {
+	        		cb(null, true);
+	      } 
+	      else {
+	          // cb(null, false);
+	          return cb(new Error('only mp4 or mp3/mpeg files are allowed'));
+	      }
+      	}
     }
     const upload = multer({
       storage : storage, 
@@ -597,6 +618,7 @@ module.exports.audioVideoUpload = async (req, res) =>{
         res.send({error, success : false, message : "only mp4 or mp3/mpeg files are allowed"});
       }
       else{
+        console.log("file.mimetype: ",req.body);
         let { userId } = jwt.decode(req.params.token);
         let chatData = new Chat({
           user_id : userId,
@@ -605,11 +627,12 @@ module.exports.audioVideoUpload = async (req, res) =>{
           counsellor_id : req.body.counsellor_id,
           counsellorname : req.body.counsellorname,
           joinId : req.body.joinId,
-          message : req.file.mimetype === 'video/mp4' ? "video/" + req.file.filename :"audio/" + req.file.filename,
+          message : req.file.mimetype === 'audio/mp3' || req.file.mimetype ===  'audio/mpeg' ? "audios/" + req.file.filename :"videos/" + req.file.filename,
           fileupload : req.file.mimetype,
-          message_type : req.file.mimetype==='video/mp4'||req.file.mimetype==='video/x-matroska'  ? "video" : "audio",
+          message_type : req.file.mimetype==='audio/mp3'||req.file.mimetype==='audio/mpeg'  ? "audio" : "video",
           time : Date.now(),
-          id : req.body.id
+          id : req.body.id,
+          role : req.body.role
         });
         chatData.save()
         .then(doc => {
@@ -621,13 +644,13 @@ module.exports.audioVideoUpload = async (req, res) =>{
           });
         })
         .catch(error => {
-          res.send({ error, success: false, message: "DB error: attachment data save error" });
+          res.send({ error, success: false, message: "DB error: file data save error" });
         })
       }
     })
   } 
   catch (error) {
-    res.send({error, message : " you just got an error in file upload"});
+    res.send({error, message : "you just got an error in file upload"});
   }
 }
 
@@ -636,12 +659,14 @@ module.exports.audioVideoUpload = async (req, res) =>{
 module.exports.attachment = (req, res) => {
   try {
     const fileFilter = (req, file, cb) => {
-      if (file.mimetype == 'application/pdf' || file.mimetype == 'text/plain') {
+      if(file.mimetype == 'application/pdf' || file.mimetype == 'image/jpeg' || 
+      file.mimetype == 'image/png'|| file.mimetype == 'image/jpg' ||  file.mimetype == 'application/msword' || 
+      file.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
         cb(null, true);
       }
       else {
         // cb(null, false)
-        cb(new Error('only pdf or txt files are allowed'));
+        cb(new Error('only pdf/doc/images are allowed'));
       }
     }
     const upload = multer({ storage: storage, fileFilter: fileFilter }).single('file');

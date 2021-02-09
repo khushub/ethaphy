@@ -779,9 +779,9 @@ module.exports.potential = async (req, res) =>{
           userId : docs[i].user_id
  
         }
-        console.log("potenrial[i] : ", potential[i]);
       }
-      res.send({data : potential, success : false , message : "potential fetched"});
+      potential =  _.uniqBy(potential, 'userName');
+      res.send({potential, success : false , message : "potential fetched"});
     })
   } 
   catch (error) {
@@ -815,7 +815,8 @@ module.exports.inbox = (req, res) => {
               // console.log(user.status);
             })
           }
-          res.send({ data: array, success: true, message: "inobx data fetched" });
+          // res.send({array, success: true, message: "inobx data fetched" });
+          res.json(array).status(200);
         }
       })
       .catch(error => {
