@@ -27,8 +27,17 @@ const chatSchema = new Schema({
 
    id: { type : String }, 
 
+   role: { type : String }, 
 
+   status:{ type : String }, 
+
+   draftrole:{ type : String },
+
+   visible : { type : Boolean}
+   
 } , {timestamps :true});
 
 
 module.exports = mongoose.model('Chat', chatSchema);
+// visible : false (unread);
+// visible : true (read);

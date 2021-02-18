@@ -590,7 +590,7 @@ module.exports.profilePictureUpload = (req, res) => {
 }
 
 
-module.exports.audioVideoUpload = async (req, res) =>{
+module.exports.audioVideoUpload = async (req, res) => {
   try {
     let fileSize = 20 * 1024 *1024;
     const fileFilter = (req, file, cb) => {
@@ -613,44 +613,48 @@ module.exports.audioVideoUpload = async (req, res) =>{
       storage : storage, 
       fileFilter : fileFilter, 
       limits : {fileSize : fileSize}}).single('file');
-    upload(req, res, (error) =>{
-      if(error){
-        res.send({error, success : false, message : "only mp4 or mp3/mpeg files are allowed"});
+    upload(req, res, (error) => {
+      if (error) {
+        res.send({ error, success: false, message: "only mp4 or mp3/mpeg files are allowed" });
       }
-      else{
-        console.log("file.mimetype: ",req.body);
+      else {
+        console.log("file.mimetype: ", req.body);
         let { userId } = jwt.decode(req.params.token);
-        let chatData = new Chat({
-          user_id : userId,
-          username : req.body.username,
-          user_image : req.body.user_image,
-          counsellor_id : req.body.counsellor_id,
-          counsellorname : req.body.counsellorname,
-          joinId : req.body.joinId,
-          message : req.file.mimetype === 'audio/mp3' || req.file.mimetype ===  'audio/mpeg' ? "audios/" + req.file.filename :"videos/" + req.file.filename,
-          fileupload : req.file.mimetype,
-          message_type : req.file.mimetype==='audio/mp3'||req.file.mimetype==='audio/mpeg'  ? "audio" : "video",
-          time : Date.now(),
-          id : req.body.id,
-          role : req.body.role
-        });
-        chatData.save()
-        .then(doc => {
-          console.log("doc: ", doc);
-          res.send({ 
-            data: doc.fileupload, 
-            success : true, 
-            message: "you just uploaded a file" 
-          });
-        })
-        .catch(error => {
-          res.send({ error, success: false, message: "DB error: file data save error" });
-        })
+        Chat.findById(req.body.joinId)
+          .then(thread => {
+            let chatData = new Chat({
+              user_id: thread.userId,
+              username: thread.username,
+              user_image: thread.user_image ? thread.user_image : "" ,
+              counsellor_id: thread.counsellor_id,
+              counsellorname: thread.counsellorname,
+              joinId: req.body.joinId,
+              message: req.file.mimetype === 'audio/mp3' || req.file.mimetype === 'audio/mpeg' ? "audios/" + req.file.filename : "videos/" + req.file.filename,
+              fileupload: req.file.mimetype,
+              message_type: req.file.mimetype === 'audio/mp3' || req.file.mimetype === 'audio/mpeg' ? "audio" : "video",
+              time: Date.now(),
+              id: thread.id,
+              role: thread.role,
+              messageAudio: req.body.messageAudio
+            });
+            chatData.save()
+              .then(doc => {
+                console.log("doc: ", doc);
+                res.send({
+                  data: doc.fileupload,
+                  success: true,
+                  message: "you just uploaded a file"
+                });
+              })
+              .catch(error => {
+                res.send({ error, success: false, message: "DB error: file data save error" });
+              })
+          })
       }
     })
-  } 
+  }
   catch (error) {
-    res.send({error, message : "you just got an error in file upload"});
+    res.send({ error, message: "you just got an error in file upload" });
   }
 }
 
@@ -658,17 +662,33 @@ module.exports.audioVideoUpload = async (req, res) =>{
 
 module.exports.attachment = (req, res) => {
   try {
-    const fileFilter = (req, file, cb) => {
-      if(file.mimetype == 'application/pdf' || file.mimetype == 'image/jpeg' || 
-      file.mimetype == 'image/png'|| file.mimetype == 'image/jpg' ||  file.mimetype == 'application/msword' || 
-      file.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
-        cb(null, true);
+    const storage = multer.diskStorage({
+      destination: (req, file, cb) => {
+        if(file.mimetype == 'application/pdf' || file.mimetype == 'image/jpeg' || 
+          file.mimetype == 'image/png'|| file.mimetype == 'image/jpg' ||  file.mimetype == 'application/msword' || 
+          file.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
+          cb(null,'./uploads/user/attachment');
+        }
+      },
+  
+      filename: (req, file, cb) => {
+          let originalname = file.originalname;
+          let extension = originalname.split(".");
+          filename = Date.now() + "." + extension[extension.length - 1];
+          cb(null, filename);
+      },
+  });
+      const fileFilter = (req, file, cb) => {
+        if(file.mimetype == 'application/pdf' || file.mimetype == 'image/jpeg' || 
+        file.mimetype == 'image/png'|| file.mimetype == 'image/jpg' ||  file.mimetype == 'application/msword' || 
+        file.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
+          cb(null, true);
+        }
+        else {
+          // cb(null, false)
+          cb(new Error('only pdf/doc/images are allowed'));
+        }
       }
-      else {
-        // cb(null, false)
-        cb(new Error('only pdf/doc/images are allowed'));
-      }
-    }
     const upload = multer({ storage: storage, fileFilter: fileFilter }).single('file');
     upload(req, res, async (error) => {
       if (error) {
@@ -677,36 +697,45 @@ module.exports.attachment = (req, res) => {
       else {
         let { userId } = jwt.decode(req.params.token);
         // let userId = req.params.token;
-        let chatData = new Chat({
-          user_id : userId,
-          username : req.body.username,
-          user_image : req.body.user_image,
-          counsellor_id : req.body.counsellor_id,
-          counsellorname : req.body.counsellorname,
-          joinId : req.body.joinId,
-          message : "attachment/" + req.file.filename,
-          fileupload : "attachment",
-          message_type : req.file.mimetype,
-          time : Date.now(),
-          id : req.body.id
-        });
-        chatData.save()
-          .then(doc => {
-            console.log("doc: ", doc);
-            res.send({ 
-              data: "attachment/" + req.file.filename, 
-              success : true, 
-              message: "you just uploaded a file" 
-            });
-          })
-          .catch(error => {
-            res.send({ error, success: false, message: "DB error: attachment data save error" });
+        Chat.findOne({joinId : req.body.joinId})
+          .then(thread => {
+            if (!thread) {
+              res.send({ data: {}, success: false, message: "No thread found" });
+            }
+            else {
+              let chatData = new Chat({
+                user_id: thread.userId,
+                username: thread.username,
+                user_image: thread.user_image ? thread.user_image : "" ,
+                counsellor_id: thread.counsellor_id,
+                counsellorname: thread.counsellorname,
+                joinId: req.body.joinId,
+                message: "attachment/" + req.file.filename,
+                fileupload: "attachment",
+                message_type: req.file.mimetype,
+                time: Date.now(),
+                id: thread.id,
+                messageAudio: req.body.messageAudio
+              });
+              chatData.save()
+                .then(doc => {
+                  console.log("doc: ", doc);
+                  res.send({ 
+                    data: doc, 
+                    success : true, 
+                    message: "you just uploaded a file" 
+                  });
+                })
+                .catch(error => {
+                  res.send({ error, success: false, message: "DB error: attachment data save error" });
+                })
+            }
           })
       }
     })
   }
   catch (error) {
-    res.send({ error, success : false, message: " you just got error in attachment" });
+    res.send({ error, success: false, message: " you just got error in attachment" });
   }
 }
 
@@ -846,7 +875,7 @@ module.exports.getCurrentMembership = async (req, res) => {
       customer: customerId
     })
       .then(invoices => {
-        console.log("inovices: ",inovices);
+        console.log("inovices: ",invoices);
         stripe.invoices.retrieve(
           invoices.data[0].id
         )
@@ -929,10 +958,12 @@ module.exports.getPastInvoices = async (req, res) => {
 
 module.exports.updatePlan = (req, res) =>{
   try {
-    let {userId} = jwt.decode(req.params.token);
-
+    // let {userId} = jwt.decode(req.params.token);
+    let userId = req.params.token;
+    console.log("userid: ", userId);
     User.findById(userId)
     .then(doc =>{
+      console.log("doc: ", doc.subscriptionId);
       if (doc.subscriptionId !== null) {
         stripe.subscriptions.retrieve(
           doc.subscriptionId
@@ -1251,7 +1282,7 @@ module.exports.getActiveSlotByDate = async (req, res) =>{
     let counselorId = req.body.counselorId;
     let date = new Date(req.body.date).toDateString();
     console.log("date is: ", date);
-    const slots = await UpcomingSlots.find(
+    const slots = await UpcomingSlots.findOne(
       {counselorId : counselorId},
       {availability : {$elemMatch : {date : date}}}
       );

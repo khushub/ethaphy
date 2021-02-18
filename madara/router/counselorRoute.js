@@ -45,6 +45,12 @@ router.get('/inbox/:token', counselorHandler.inbox);
 
 router.put('/action/:token', counselorHandler.action);
 
+router.get('/count/:token', counselorHandler.getCount);
+
+router.get('/draftList/:token', counselorHandler.getDraftList);
+
+router.post('/sendDraft/:token', counselorHandler.sendDraft);
+
 
 // update and file upload related routes
 

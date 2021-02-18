@@ -795,9 +795,9 @@ module.exports.potential = async (req, res) =>{
 
 module.exports.inbox = (req, res) => {
   try {
-    let { userId } = jwt.decode(req.params.token);
-    // let userId = req.params.token;
-    Chat.find({ counsellor_id: userId , message_type : "text"})
+    // let { userId } = jwt.decode(req.params.token);
+    let userId = req.params.token;
+    Chat.find({ counsellor_id: userId})
       .then(async doc => {
         if (doc.length == 0 || !doc) {
           res.send({ data: {}, success: false, message: "no message found" });
@@ -828,6 +828,91 @@ module.exports.inbox = (req, res) => {
   }
 }
 
+
+
+// get draft list of counsellor
+
+module.exports.getDraftList = (req, res) =>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    Chat.find({counsellor_id : userId, draftrole : "1", message : {$ne : ""}})
+    .then(draft =>{
+      if(!draft || draft.length == 0){
+        return res.send({data : {}, success : false, message : "no draft found"});
+      }
+      else{
+        res.send({draft, success : true, message : "draft list fetched"});
+      }
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "DB error in draft fetch"});
+    })
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "unknown error"});
+  }
+}
+
+
+
+// send saved draft as message 
+
+module.exports.sendDraft = (req, res) => {
+  try {
+    // let { userId } = jwt.decode(req.params.token);
+    let id = req.body.id;
+    Chat.findById(id)
+      .then(draft => {
+        if (!draft) {
+          res.send({ data: {}, success: false, message: "no draft found with such id" });
+        }
+        else {
+          chatData = new Chat({
+            user_id: draft.user_id,
+            username: draft.username,
+            counsellor_id: draft.counsellor_id,
+            counsellorname: draft.counsellorname,
+            joinId: draft.joinId,
+            visible : false,
+            message: draft.message,
+            type: "text",
+            role: draft.role,
+            time: new Date()
+          })
+          chatData.save()
+            .then(chat => {
+              const newDraft = {
+                message: "",
+                time: new Date()
+              }
+              Chat.updateOne({_id : id}, newDraft, {upsert : true})
+              .then(response =>{
+                console.log("response: ", response);
+                res.send({chat , success : true, message : "message send"});
+              })
+              .catch(error =>{
+                res.send({error, success : false, message : "DB error : draft update"});
+              })
+            })
+            .catch(error => {
+              res.send({ error, success: false, message: "DB error: chat data save" });
+            })
+        }
+      })
+      .catch(error => {
+        res.send({ error, success: false, message: "db error in draft found" })
+      })
+  }
+  catch (error) {
+    res.send({ error, success: false, message: "unknown error" });
+  }
+}
+
+
+
+
+
+
 // take action against message 
 
 module.exports.action = (req, res) =>{
@@ -847,6 +932,37 @@ module.exports.action = (req, res) =>{
   }
 }
 
+
+
+// get count of potential and text messages
+
+module.exports.getCount = async (req, res) =>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    Chat.find({counsellor_id : "5fc9cb88db493e26f44e9622"}).countDocuments()
+    .then(async potential =>{
+      Chat.find({counsellor_id : userId}).countDocuments()
+      .then(async unreadMessage =>{
+        Chat.find({counsellor_id : userId, draftrole : "1",message : {$ne : ""}}).countDocuments()
+        .then(draft =>{
+          res.send({potential, unreadMessage, draft});
+        })
+        .catch(error =>{
+          res.send({error, success : false, message : "draft count fetch error"});
+        })
+      })
+      .catch(error =>{
+        res.send({error, success : false, message : "DB error : in chat find"});
+      })
+    })
+    .catch(error =>{
+      res.send({error, success : false, message  : "potential find error"});
+    })
+  } 
+  catch (error) {
+    res.send({error, success : false, message  : "unknown error"});
+  }
+}
 
 
 

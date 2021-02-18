@@ -22,13 +22,11 @@ module.exports.addCard = async (req, res) => {
                 cvc: req.body.cvc
             }
         }
-        const customerData = {
-			                    name: req.body.username,
-			                    email: req.body.email,
-			                    address: req.body.address
-                			}
-
-         stripe.customers.create(customerData)
+         stripe.customers.create({
+             name : req.body.username,
+             email : req.body.email,
+             address : req.body.address
+         })
          .then(customer =>{
              console.log("customer: ", customer.id);
          	stripe.tokens.create(cardDetails)
@@ -61,10 +59,12 @@ module.exports.addCard = async (req, res) => {
                                                     price: priceId
                                                 },
                                             ],
-                                            trial_period_days: 3
+                                            trial_period_days: 0
                                         })
                                             .then(subscription => {
+                                                console.log("subscriptions: ", subscription);
                                                 let {userId} = jwt.decode(req.params.token)
+                                                // let userId = req.params.token;
                                                 User.updateOne({ _id: userId},
                                                     {
                                                         $set: {
