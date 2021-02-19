@@ -543,7 +543,7 @@ const storage = multer.diskStorage({
     // let originalname = file.originalname;
     // let extension = originalname.split(".");
     // filename = Date.now() + "." + extension[extension.length - 1];
-    filename = (file.mimetype === 'audio/mp3' || file.mimetype === 'audio/mpeg') ? file.originalname +'.mp3' : file.originalname +'.mp4'
+    filename = (file.mimetype === 'audio/mp3' || file.mimetype === 'audio/mpeg') ? file.originalname : file.originalname +'.mp4'
     console.log("filename: ", filename);
     cb(null, filename);
   },
@@ -620,7 +620,7 @@ module.exports.audioVideoUpload = async (req, res) => {
       else {
         console.log("file.mimetype: ", req.body);
         let { userId } = jwt.decode(req.params.token);
-        Chat.findById(req.body.joinId)
+        Chat.findOne({joinId : req.body.joinId})
           .then(thread => {
             let chatData = new Chat({
               user_id: thread.userId,
