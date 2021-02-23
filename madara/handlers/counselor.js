@@ -795,15 +795,15 @@ module.exports.potential = async (req, res) =>{
 
 module.exports.inbox = (req, res) => {
   try {
-    // let { userId } = jwt.decode(req.params.token);
-    let userId = req.params.token;
+    let { userId } = jwt.decode(req.params.token);
+    // let userId = req.params.token;
     Chat.find({ counsellor_id: userId})
       .then(async doc => {
         if (doc.length == 0 || !doc) {
           res.send({ data: {}, success: false, message: "no message found" });
         }
         else {
-          // console.log("doc: ", doc);
+          console.log("doc: ", doc);
           let array = _.uniqBy(doc, 'username');
           for(let i=0; i< array.length; i++){
             console.log(array[i].user_id);
@@ -811,11 +811,10 @@ module.exports.inbox = (req, res) => {
             .then(user =>{
               array[i] = array[i].toJSON();
               array[i].status = user.status
-              console.log("user: ", array[i]);
+              // console.log("user: ", array[i]);
               // console.log(user.status);
             })
           }
-          // res.send({array, success: true, message: "inobx data fetched" });
           res.json(array).status(200);
         }
       })

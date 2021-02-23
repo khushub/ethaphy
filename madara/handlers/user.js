@@ -958,8 +958,8 @@ module.exports.getPastInvoices = async (req, res) => {
 
 module.exports.updatePlan = (req, res) =>{
   try {
-    // let {userId} = jwt.decode(req.params.token);
-    let userId = req.params.token;
+    let {userId} = jwt.decode(req.params.token);
+    // let userId = req.params.token;
     console.log("userid: ", userId);
     User.findById(userId)
     .then(doc =>{
@@ -969,6 +969,7 @@ module.exports.updatePlan = (req, res) =>{
           doc.subscriptionId
         )
         .then(subscription =>{
+          console.log("stripe subscription: ", subscription);
           stripe.subscriptions.update(
             doc.subscriptionId,
             {
@@ -1047,35 +1048,40 @@ module.exports.cancelSubscription = (req, res) => {
   try {
     User.findOne({ stripeCustomerId: req.body.stripeCustomerId })
       .then(result => {
-        stripe.subscriptions.retrieve(
-          result.subscriptionId
-        )
-        .then(subscription =>{
-          console.log(new Date(subscription.current_period_start * 1000).toUTCString());
-          res.send({data : subscription});
-        });
-        // stripe.subscriptions.del(result.subscriptionId)
-        //   .then(response => {
-        //     result.status = 'inactive';
-        //     result.subscriptionId = null;
-        //     result.save()
-        //       .then(doc => {
-        //         res.send({ response, success: true, message: "subscription canceled" });
-        //         console.log("response: ", response);
-        //       })
-        //       .catch(error => {
-        //         res.send({ error, success: false, message: "DB error in user status update" });
-        //       });
-
-        //   })
-        //   .catch(error => {
-        //     console.log(error, "error");
-        //     res.send({
-        //       error: error,
-        //       success: false,
-        //       message: error.raw.message
-        //     });
-        //   });
+        if(result.subscriptionId == null){
+          res.send({data : {}, success : false, message : "you dont have any current plan to cancel"});
+        }
+        else{
+          stripe.subscriptions.retrieve(
+            result.subscriptionId
+          )
+          .then(subscription =>{
+            console.log(new Date(subscription.current_period_start * 1000).toUTCString());
+            // res.send({data : subscription});
+          });
+          stripe.subscriptions.del(result.subscriptionId)
+            .then(response => {
+              result.status = 'inactive';
+              result.subscriptionId = null;
+              result.save()
+                .then(doc => {
+                  res.send({ response, success: true, message: "subscription canceled" });
+                  console.log("response: ", response);
+                })
+                .catch(error => {
+                  res.send({ error, success: false, message: "DB error in user status update" });
+                });
+  
+            })
+            .catch(error => {
+              console.log(error, "error");
+              res.send({
+                error: error,
+                success: false,
+                message: error.raw.message
+              });
+            });
+        }
       })
       .catch(error => {
         res.send({ error: error, success: false, message: "might be DB error or stripe error" });
@@ -1143,7 +1149,7 @@ module.exports.bookSlots = async (req, res) => {
     // console.log(req.body);
     let { userId } = jwt.decode(req.params.token);
     if (!req.body.stripeCustomerId) {
-
+      console.log("in if condition");
       const customer = await stripe.customers.create({
         email: req.body.email,
         name: req.body.username,
@@ -1160,15 +1166,10 @@ module.exports.bookSlots = async (req, res) => {
         },
       });
       
-      stripe.customers.createSource(customer.id,{
+      const source = await stripe.customers.createSource(customer.id,{
         source: token.id
       })
-      .then(async (source) =>{
-        console.log("source :", source.id);
-      })
-      .catch(error =>{
-        console.log("error: ", error);
-      })
+
       await stripe.charges.create({
         amount: 2000,
         currency: 'usd',
@@ -1280,8 +1281,9 @@ module.exports.getActiveSlots = async (req, res) =>{
 module.exports.getActiveSlotByDate = async (req, res) =>{
   try {
     let counselorId = req.body.counselorId;
+    // console.log("date: ", req.body);
     let date = new Date(req.body.date).toDateString();
-    console.log("date is: ", date);
+    // console.log("date is: ", date, " counselor id: ", counselorId);
     const slots = await UpcomingSlots.findOne(
       {counselorId : counselorId},
       {availability : {$elemMatch : {date : date}}}

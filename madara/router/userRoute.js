@@ -26,7 +26,7 @@ router.post('/viewAllPlan', userHandler.viewAllPlan);
 
 router.post('/viewSinglePlan', userHandler.viewSinglePlan);
 
-router.post('/cancelSubscription', userHandler.cancelSubscription);
+router.post('/cancelSubscription/:token', userHandler.cancelSubscription);
 
 router.post('/cardUpdate', userHandler.updateCard);
 

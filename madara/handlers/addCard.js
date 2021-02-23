@@ -37,7 +37,7 @@ module.exports.addCard = async (req, res) => {
                      console.log("source: ", source, customer.id);
          				stripe.charges.create({
                                         amount: 1999,
-                                        currency: 'inr',
+                                        currency: 'usd',
                                         source: source.id,
                                         description: "Trying to validate a card",
                                         capture: false,
