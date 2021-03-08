@@ -181,11 +181,10 @@ module.exports.createCounselor = async function (req, res) {
   
       Counselor.findOne({ email: req.body.email }, function (err, details) {
         if (err) {
-          logger.error('login: DBError in finding user details.');
-          return;
+          return res.status(500).send({ error: err, success: false  ,message: "DB error"});
         }
         if (!details) {
-          return res.send({ error: err, success: false  ,message: "No counselor exist with this email"}).status(401);
+          return res.status(401).send({ error: err, success: false  ,message: "No counselor exist with this email"});
         }
   
         /* condition for compare password with counselor table data */
@@ -193,8 +192,6 @@ module.exports.createCounselor = async function (req, res) {
         if (!Helper.comparePassword(details.password, password)) {
           return res.send({data : {}, error: "Invalid Password" , success : false}).status(403);
         };
-  
-        logger.info('login: ' + details.email + ' logged in.');
         details.fcmToken = req.body.fcmToken;
         details.save().then(doc => console.log("doument: ", doc));
         const token = Helper.generateToken(details._id);
@@ -202,11 +199,11 @@ module.exports.createCounselor = async function (req, res) {
           details,
           token
         }
-        return res.send({ data: data,success : true, message: "Counselor login success" }).status(200);
+        return res.status(200).send({ data: data,success : true, message: "Counselor login success" });
       })
     }
     catch (error) {
-      res.send({ error: error.message }).status(500);
+      res.status(500).send({ error: error.message });
     }
   };
 
@@ -765,14 +762,15 @@ module.exports.disableSlotsByDate = async (req, res) => {
 
 // Potential functionality
 
-module.exports.potential = async (req, res) =>{
+module.exports.potential = (req, res) =>{
   try {
-    await Chat.find({counsellor_id : "5fc9cb88db493e26f44e9622"})
+    Chat.find({counsellor_id : "5fc9cb88db493e26f44e9622"})
     .then(docs =>{
-      // console.log("docs: ", docs.length);
+      console.log("docs: ", docs.length);
+      docs =  _.uniqBy(docs, 'user_id');
       let potential = [];
       for(let i=0; i< docs.length; i++){
-        console.log("docs[i] : ",docs[i]);
+        // console.log("docs[i] : ",docs[i]);
         potential[i] = {
           userName : docs[i].username,
           userImage : docs[i].user_image,
@@ -780,7 +778,6 @@ module.exports.potential = async (req, res) =>{
  
         }
       }
-      potential =  _.uniqBy(potential, 'userName');
       res.send({potential, success : false , message : "potential fetched"});
     })
   } 
@@ -797,33 +794,31 @@ module.exports.inbox = (req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token);
     // let userId = req.params.token;
-    Chat.find({ counsellor_id: userId})
+    Chat.find({ counsellor_id: userId}).sort({"time" : -1})
       .then(async doc => {
         if (doc.length == 0 || !doc) {
           res.send({ data: {}, success: false, message: "no message found" });
         }
         else {
-          console.log("doc: ", doc);
-          let array = _.uniqBy(doc, 'username');
+          // console.log("doc: ", doc);
+          let array = _.uniqBy(doc, 'user_id');
           for(let i=0; i< array.length; i++){
             console.log(array[i].user_id);
-            await userModel.findOne({_id : array[i].user_id})
+            userModel.findOne({_id : array[i].user_id})
             .then(user =>{
               array[i] = array[i].toJSON();
-              array[i].status = user.status
-              // console.log("user: ", array[i]);
-              // console.log(user.status);
+              array[i].status = user.status;
             })
           }
           res.json(array).status(200);
         }
       })
       .catch(error => {
-        res.send({ error, success: false, message: "DB error:  inbox data fetch" });
+        res.status(500).send({ error, success: false, message: "DB error:  inbox data fetch" });
       })
   }
   catch (error) {
-    res.send({ error, success: false, message: "unknown error" });
+    res.status(501).send({ error, success: false, message: "unknown error" });
   }
 }
 
@@ -938,10 +933,14 @@ module.exports.action = (req, res) =>{
 module.exports.getCount = async (req, res) =>{
   try {
     let {userId} = jwt.decode(req.params.token);
-    Chat.find({counsellor_id : "5fc9cb88db493e26f44e9622"}).countDocuments()
+    Chat.find({counsellor_id : "5fc9cb88db493e26f44e9622"})
     .then(async potential =>{
-      Chat.find({counsellor_id : userId}).countDocuments()
+      potential =  _.uniqBy(potential, 'user_id');
+      potential = potential.length;
+      Chat.find({counsellor_id : userId})
       .then(async unreadMessage =>{
+        unreadMessage =  _.uniqBy(unreadMessage, 'user_id');
+        unreadMessage = unreadMessage.length;
         Chat.find({counsellor_id : userId, draftrole : "1",message : {$ne : ""}}).countDocuments()
         .then(draft =>{
           res.send({potential, unreadMessage, draft});
@@ -970,12 +969,12 @@ module.exports.getCount = async (req, res) =>{
 
 module.exports.userAssignment = async (req, res) =>{
   try {
-      // let counselorId = jwt.decode(req.params.token);
-      let counselorId = req.params.token;
+      let counselorId = jwt.decode(req.params.token).userId;
+      // let counselorId = req.params.token;
       let userId = req.body.userId
       console.log("counselor: ", counselorId, " userId: ", userId);
       let counselorData = await Counselor.findById(counselorId);
-      console.log("counselorData: ",counselorData.introMessage);
+      console.log("counselorData: ",counselorData);
       let assignmentData = new CounselorToUser({
         counselorId : counselorId,
         userId : userId
@@ -983,17 +982,17 @@ module.exports.userAssignment = async (req, res) =>{
       await assignmentData.save()
       .then(async (doc) =>{
         console.log("doc: ", doc);
-        await Chat.findOneAndUpdate({ user_id: req.body.userId },
-          [{$set : {
+        let threadData = {
             counsellor_id : counselorId,
-            counsellorname : req.body.counselorName,
-            joinId : req.body.userId + "-" + counselorId,
+            counsellorname : counselorData.userName,
+            joinId : userId + "-" + counselorId,
             message : counselorData.introMessage ? counselorData.introMessage : ""
-          }
-        }], {new : true})
+        }
+        await Chat.updateOne({ user_id: userId}, threadData, {upsert : true})
         .then(chat =>{
           console.log("chat : ", chat);
-          res.send({thread : chat,success : true, message : "counselor assing to user"});
+          let joinId = userId + "-" + counselorId;
+          res.send({thread : chat,joinId,success : true, message : "counselor assing to user"});
         })
         .catch(error =>{
           res.send({error, success : false , message : "DB error : thread data save error"});
@@ -1019,13 +1018,13 @@ module.exports.getMessages =  (req, res) => {
           .then(thread => {
             let date = new Date().toISOString().substring(0, 10);
             let slots = CounselorToUser.find({ userId: req.body.userId, date: { $gte: date } })
-            console.log("slot: ",  typeof slots);
+            // console.log("slot: ",  typeof slots);
             let data = thread.toJSON();
             data.status = user.status;
             slots = slots.map(slot =>{
               return {time  : slot.slots, date : slot.date };
             });
-            console.log("slots: ", slots);
+            // console.log("slots: ", slots);
             data.slots = slots
             res.send({ data, success: true, message: "Messages fetched" });
           })

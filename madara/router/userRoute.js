@@ -16,7 +16,7 @@ router.post('/verifyOTP', userHandler.verifyOTP);
 
 router.put('/resetPassword/:token', userHandler.resetPassword);
 
-router.put('/imageUpload/:id',userHandler.profilePictureUpload);
+router.put('/imageUpload/:token',userHandler.profilePictureUpload);
 
 router.put('/nickNameUpdate/:token',userHandler.updateNickName);
 

@@ -540,12 +540,27 @@ const storage = multer.diskStorage({
 
   filename: (req, file, cb) => {
   	console.log("file: ", req.file , " ", file);
-    // let originalname = file.originalname;
-    // let extension = originalname.split(".");
-    // filename = Date.now() + "." + extension[extension.length - 1];
-    filename = (file.mimetype === 'audio/mp3' || file.mimetype === 'audio/mpeg') ? file.originalname : file.originalname +'.mp4'
-    console.log("filename: ", filename);
-    cb(null, filename);
+    if(file.mimetype === 'audio/mp3' || file.mimetype === 'audio/mpeg' || 
+      file.mimetype == 'video/mp4'|| file.mimetype == 'video/x-matroska'){
+      let originalname = file.originalname;
+      let extension = originalname.split(".");
+      console.log("extension: ", extension);
+      if(extension[extension.length - 1] == 'mp3'){
+        filename = Date.now() + "." + extension[extension.length - 1];
+        cb(null, filename);
+      }
+      else{
+        filename = (file.mimetype === 'audio/mp3' || file.mimetype === 'audio/mpeg') ? file.originalname + '.mp3' : file.originalname +'.mp4'
+        console.log("filename: ", filename);
+        cb(null, filename);
+      }
+    }
+    else{
+      let originalname = file.originalname;
+      let extension = originalname.split(".");
+      filename = Date.now() + "." + extension[extension.length - 1];
+      cb(null, filename);
+    }
   },
 });
 
@@ -562,22 +577,38 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ storage : storage, fileFilter :fileFilter }).single('image');
 
 
+// user profile picture upload section
 module.exports.profilePictureUpload = (req, res) => {
   upload(req, res,(error) =>{
+    console.log("req.file: ", req.file);
     if(error){
       res.send({data : {}, success : false, error, message : "file upload error" });
     }
     else{
       try {
         
-        let {userId} = jwt.decode(req.params.token);
-        User.findByIdAndUpdate({_id : userId},
-          [{$set : {profilePhoto : req.file.filename}}],{upsert : true, new : true})
+        // let {userId} = jwt.decode(req.params.token);
+        let userId = req.params.token;
+        console.log("req.file.filename: ", req.file.filename, userId);
+        let imageData = {
+          profilePhoto : req.file.filename
+        }
+        User.updateOne({_id : userId}, imageData, {new : true})
           .then((result, error) =>{
             if(error){
               res.send({data : {}, error, success : false, message : "error in file upload"});
             }
-            res.send({data : result, message: "image uploaded", success: true }).status(201);
+            else{
+              console.log("in else: ", req.file.filename, req.params.token);
+              Chat.updateMany({user_id : userId}, [{$set : {"user_image" : req.file.filename}}])
+              .then(data =>{
+                console.log("data: ", data);
+              }).
+              catch(error =>{
+                console.log("error: ", error);
+              })
+              res.send({data : req.file.filename, message: "image uploaded", success: true }).status(201);
+            }
           })
           .catch(error => res.send({error, message: "image upload error", success: false }).status(201));
       }
@@ -588,7 +619,6 @@ module.exports.profilePictureUpload = (req, res) => {
     }
   });
 }
-
 
 module.exports.audioVideoUpload = async (req, res) => {
   try {
