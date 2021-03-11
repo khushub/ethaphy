@@ -794,21 +794,27 @@ module.exports.inbox = (req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token);
     // let userId = req.params.token;
-    Chat.find({ counsellor_id: userId}).sort({"time" : -1})
+    Chat.find({ counsellor_id: userId }).sort({ "time": 1 })
       .then(async doc => {
         if (doc.length == 0 || !doc) {
           res.send({ data: {}, success: false, message: "no message found" });
         }
         else {
           // console.log("doc: ", doc);
-          let array = _.uniqBy(doc, 'user_id');
-          for(let i=0; i< array.length; i++){
-            console.log(array[i].user_id);
-            userModel.findOne({_id : array[i].user_id})
-            .then(user =>{
-              array[i] = array[i].toJSON();
-              array[i].status = user.status;
-            })
+          let array = _.uniqBy(doc, 'username');
+          // let key = 'user_id';
+          // const array = [...new Map(doc.map(item =>
+          //   [item[key], item])).values()];
+          // console.log("arrayUniqueByKey: ", array);
+          for (let i = 0; i < array.length; i++) {
+            if (array[i].username) {
+              console.log(array[i].username);
+              await userModel.findOne({ _id: array[i].user_id })
+                .then(user => {
+                  array[i] = array[i].toJSON();
+                  array[i].status = user.status;
+                })
+            }
           }
           res.json(array).status(200);
         }
@@ -935,11 +941,16 @@ module.exports.getCount = async (req, res) =>{
     let {userId} = jwt.decode(req.params.token);
     Chat.find({counsellor_id : "5fc9cb88db493e26f44e9622"})
     .then(async potential =>{
-      potential =  _.uniqBy(potential, 'user_id');
+      // potential =  _.uniqBy(potential, 'user_id');
+      let key = 'user_id';
+      potential = [...new Map(potential.map(item =>
+            [item[key], item])).values()];
       potential = potential.length;
       Chat.find({counsellor_id : userId})
       .then(async unreadMessage =>{
-        unreadMessage =  _.uniqBy(unreadMessage, 'user_id');
+        // unreadMessage =  _.uniqBy(unreadMessage, 'user_id');
+        unreadMessage = [...new Map(unreadMessage.map(item =>
+            [item[key], item])).values()];
         unreadMessage = unreadMessage.length;
         Chat.find({counsellor_id : userId, draftrole : "1",message : {$ne : ""}}).countDocuments()
         .then(draft =>{
@@ -958,7 +969,7 @@ module.exports.getCount = async (req, res) =>{
     })
   } 
   catch (error) {
-    res.send({error, success : false, message  : "unknown error"});
+    res.send({error, success : false, message  : "unknown error in count fetch"});
   }
 }
 
@@ -1010,34 +1021,36 @@ module.exports.userAssignment = async (req, res) =>{
 
 // get messages for a user
 
-module.exports.getMessages =  (req, res) => {
+module.exports.getUpcomingSessionsForaUser =  (req, res) => {
   try {
-      userModel.findById(req.body.userId)
-      .then(user => {
-        Chat.findOne({ user_id: req.body.userId })
-          .then(thread => {
-            let date = new Date().toISOString().substring(0, 10);
-            let slots = CounselorToUser.find({ userId: req.body.userId, date: { $gte: date } })
-            // console.log("slot: ",  typeof slots);
-            let data = thread.toJSON();
-            data.status = user.status;
-            slots = slots.map(slot =>{
-              return {time  : slot.slots, date : slot.date };
-            });
-            // console.log("slots: ", slots);
-            data.slots = slots
-            res.send({ data, success: true, message: "Messages fetched" });
-          })
-          .catch(error => {
-            res.send({ error, success: false, message: "DB error: No user found" });
-          })
-      })
-      .catch(error => {
-        res.send({ error, success: false, message: "DB error: NO user exist" });
-      })
+    let counselorId = jwt.decode(req.params.token).userId;
+    let userId = req.body.userId;
+    let date = new Date().toISOString().substring(0, 10);
+    // console.log("counsleor id: ", counselorId, " userId: ", userId, " date is : ", date);
+    CounselorToUser.find({ userId: userId,counselorId : counselorId, date : { $gte : date }})
+    .then(upcomingSessions =>{
+      res.send({upcomingSessions , success : true, message : "you got your upcoming sessions for this user"});  
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "DB error in upcoming session find"});
+    })
   }
   catch (error) {
     res.send({ error, success: false, message: "unknown error" });
+  }
+}
+
+
+
+
+// cancel a session of a particular user
+module.exports.cancelSession = (req, res) =>{
+  try {
+    let counselorId = jwt.decode(req.params.token).userId;
+    console.log("hello");
+  } 
+  catch (error) {
+    res.send({error});
   }
 }
 

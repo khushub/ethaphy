@@ -25,11 +25,15 @@ router.post('/weeklyAvailability/:token', counselorHandler.addWeeklyAvailability
 
 router.get('/getUpcomingSlots/:token', counselorHandler.getUpcomingSlots);
 
-router.get('/getBookingsForCal/:token', counselorHandler.forCalendar);
+router.post('/getBookingsForCal/:token', counselorHandler.forCalendar);
 
 router.put('/disableSlotsByTime/:token', counselorHandler.disableSlotsByTime);
 
 router.put('/disableSlotsByDate/:token', counselorHandler.disableSlotsByDate);
+
+router.post('/userUpcomingSessions/:token', counselorHandler.getUpcomingSessionsForaUser);
+
+// router.put('/cancelSession')
 
 
 // dashboard
@@ -38,8 +42,6 @@ router.get('/todayPlan/:token', counselorHandler.todayPlan)
 router.get('/potential/:token', counselorHandler.potential);
 
 router.post('/acceptUser/:token', counselorHandler.userAssignment);
-
-router.post('/getMessages/:token', counselorHandler.getMessages);
 
 router.get('/inbox/:token', counselorHandler.inbox);
 

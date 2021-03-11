@@ -33,7 +33,9 @@ const chatSchema = new Schema({
 
    draftrole:{ type : String },
 
-   visible : { type : Boolean}
+   visible : { type : Boolean},
+
+   agoraToken : {type : String}
    
 } , {timestamps :true});
 

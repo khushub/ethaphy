@@ -32,7 +32,7 @@ module.exports.login = async function (req, res, next) {
   try {
     const { username, password } = req.body;
     console.log(req.body);
-
+    
     /* condition for email, password are not null */
 
     if (!username || !password) {
@@ -180,7 +180,6 @@ module.exports.createUser = async function (req, res) {
     if (!username || !email || !password) {
       return res.send({data : {}, error: "username or email or password is missing", success : false }).status(400);
     }
-
     // check if user exist
    await User.findOne({$and : [{email: req.body.email, username : req.body.username}]})
     .then(user =>{
@@ -622,27 +621,29 @@ module.exports.profilePictureUpload = (req, res) => {
 
 module.exports.audioVideoUpload = async (req, res) => {
   try {
-    let fileSize = 20 * 1024 *1024;
+    let fileSize = 20 * 1024 * 1024;
     const fileFilter = (req, file, cb) => {
-    	// console.log("file.mimetype: ", file);
-    	if(!file.mimetype || file.mimetype == undefined){
-    		res.send({success : false, message : "error: undefined file"});
-    	}
-      	else{
-      		if (file.mimetype == 'video/mp4' || file.mimetype == 'audio/mpeg' ||
-	       		file.mimetype === 'video/x-matroska' || file.mimetype == 'audio/mp3') {
-	        		cb(null, true);
-	      } 
-	      else {
-	          // cb(null, false);
-	          return cb(new Error('only mp4 or mp3/mpeg files are allowed'));
-	      }
-      	}
+      // console.log("file.mimetype: ", file);
+      if (!file.mimetype || file.mimetype == undefined) {
+        res.send({ success: false, message: "error: undefined file" });
+      }
+      else {
+        // if (file.mimetype == 'video/mp4' || file.mimetype == 'audio/mpeg' ||
+        //   file.mimetype === 'video/x-matroska' || file.mimetype == 'audio/mp3') {
+        //   cb(null, true);
+        // }
+        // else {
+        //   // cb(null, false);
+        //   return cb(new Error('only mp4 or mp3/mpeg files are allowed'));
+        // }
+        cb(null, true);
+      }
     }
     const upload = multer({
-      storage : storage, 
-      fileFilter : fileFilter, 
-      limits : {fileSize : fileSize}}).single('file');
+      storage: storage,
+      fileFilter: fileFilter,
+      limits: { fileSize: fileSize }
+    }).single('file');
     upload(req, res, (error) => {
       if (error) {
         res.send({ error, success: false, message: "only mp4 or mp3/mpeg files are allowed" });
@@ -650,12 +651,12 @@ module.exports.audioVideoUpload = async (req, res) => {
       else {
         console.log("file.mimetype: ", req.body);
         let { userId } = jwt.decode(req.params.token);
-        Chat.findOne({joinId : req.body.joinId})
+        Chat.findOne({ joinId: req.body.joinId })
           .then(thread => {
             let chatData = new Chat({
               user_id: thread.userId,
               username: thread.username,
-              user_image: thread.user_image ? thread.user_image : "" ,
+              user_image: thread.user_image ? thread.user_image : "",
               counsellor_id: thread.counsellor_id,
               counsellorname: thread.counsellorname,
               joinId: req.body.joinId,
@@ -824,6 +825,59 @@ module.exports.updateNickName = (req, res) => {
 }
 
 
+
+
+
+// Switch Counselor
+// filter counselor list according to gender specified by user at time to registration
+
+module.exports.switchCounselor = (req, res) =>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    console.log("user id: ", userId);
+    User.findOne({_id : userId})
+    .then(user =>{
+      console.log("switch counselor wali api me user details: ", user);
+      let preferedfGender = req.body.preferedfGender;
+      Counselor.find({genderApplies : preferedfGender})
+      .then(docs =>{
+        res.send({docs, success : true, message : "counselor's list fetched"});
+      })
+      .catch(error =>{
+        res.send({error, success : false, message : "DB error: counselor list fetch error"});
+      })
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "DB error: user details fetch error"});
+    })
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "Unknown error"});
+  }
+}
+
+
+// get counselor profile by a user 
+
+module.exports.counselorProfile = (req, res) =>{
+  try {
+    let userId = req.body.counselorId;
+    Counselor.findById(userId, (error, doc) =>{
+      if(error){
+        res.send({data : {}, success : false, message : error.message});
+      }
+      if(!doc){
+        res.send({data : {}, success : false, message : "No counselor exist with this id"});
+      }
+      else{
+        res.send({data : doc, success : true, message : "Counselor fetched successfully"});
+      }
+    })
+  } 
+  catch (error) {
+    res.send({data : {}, success : false,error, message : "Unknown error"});
+  }
+}
 
 
 // get all questions
@@ -1195,8 +1249,8 @@ module.exports.bookSlots = async (req, res) => {
           cvc: req.body.cvc,
         },
       });
-      
-      const source = await stripe.customers.createSource(customer.id,{
+
+      const source = await stripe.customers.createSource(customer.id, {
         source: token.id
       })
 
@@ -1207,27 +1261,28 @@ module.exports.bookSlots = async (req, res) => {
         customer: customer.id,
         description: 'One time payment ',
       })
-      .then(async (charge) =>{
-        console.log("charge: ", charge);
-        const slotData = new CounselorToUser({
-          counselorId: req.body.counselorId,
-          userId: userId,
-          slots: {
+        .then(async (charge) => {
+          console.log("charge: ", charge);
+          const slotData = new CounselorToUser({
+            counselorId: req.body.counselorId,
+            userId: userId,
             date: req.body.date,
-            time: [req.body.time]
-          }
-        });
-        await slotData.save()
-        .then(slot =>{
-          res.send({data : slot, success : false, message : "session book success"});
+            slots: {
+              time: req.body.time,
+              status: 0
+            }
+          });
+          await slotData.save()
+            .then(slot => {
+              res.send({ data: slot, success: false, message: "session book success" });
+            })
+            .catch(error => {
+              res.send({ error, success: false, message: "DB error in session data save" });
+            })
         })
-        .catch(error =>{
-          res.send({error , success : false, message : "DB error in session data save" });
+        .catch(error => {
+          res.send({ error, success: false, message: "payment error: something wrong with card" });
         })
-      })
-      .catch(error =>{
-        res.send({error, success : false, message : "payment error: something wrong with card"});
-      })
     }
     else {
       User.findById(userId)
@@ -1240,15 +1295,15 @@ module.exports.bookSlots = async (req, res) => {
             description: 'My First Test Charge (created for API docs)',
           })
             .then(charge => {
-              console.log("charge: ",charge);
+              console.log("charge: ", charge);
               const slotData = new CounselorToUser({
                 counselorId: req.body.counselorId,
                 userId: userId,
+                date: req.body.date,
                 slots: {
-                  date: req.body.date,
-                  time: [req.body.time]
-                },
-                date: req.body.date
+                  time: req.body.time,
+                  status: 0
+                }
               });
               console.log(slotData);
               slotData.save()

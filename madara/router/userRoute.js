@@ -20,6 +20,10 @@ router.put('/imageUpload/:token',userHandler.profilePictureUpload);
 
 router.put('/nickNameUpdate/:token',userHandler.updateNickName);
 
+router.post('/switchCounselor/:token', userHandler.switchCounselor);
+
+router.post('/counselorProfile/:token', userHandler.counselorProfile);
+
 //Stripe Related Routes
 
 router.post('/viewAllPlan', userHandler.viewAllPlan);

@@ -6,7 +6,7 @@ const apn = require('apn');
 const speech = require('@google-cloud/speech');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-
+const Chat = require('../models/chatModel');
 const admin = require('firebase-admin');
 // const serverkey = require('../../privateKey.json');
 
@@ -209,12 +209,94 @@ module.exports.sendAndroidNotification = (req, res) =>{
 }
 
 
-module.exports.speechToText = (req, res) =>{
+
+
+module.exports.webCall = async (req, res, next) => {
     try {
-        const client = new speech.SpeechClient();
-        const filename = '../uploads'
+        // require credentials for agora token genration
+        const appId = "6bd9467439e245a8b068b16bb281608a";
+        const appCertificate = "df1120feb9e147b0a0dd896f61566174";
+
+        const expirationTimeInSeconds = 3600 // expiration time of token
+
+        const role = RtcRole.PUBLISHER
+        let userId = 0;
+        let channel = req.body.channel;
+        let typeOfCall = req.body.typeOfCall;
+        let currentTimeStamp = Math.floor(Date.now() / 1000);
+        
+        let privilegeExpiredTs = currentTimeStamp + expirationTimeInSeconds;
+        console.log("expires time in sec: ", privilegeExpiredTs);
+        let receiverId = req.body.receiverId;
+        let senderId = req.body.senderId;
+        let receiverRole = req.body.receiverRole;
+        let fcmToken;
+        let senderName;
+        let receiverName;
+        if (!channel || !receiverId || !receiverRole) {
+            return res.send({ error: 'field is missing, either channel/receiverId/receiverRole' });
+        }
+
+        else {
+
+            const key = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, channel, userId, role, privilegeExpiredTs);
+
+            if (!key) {
+                res.send({ error: 'RTC token generation error' });
+            }
+
+            else {
+                Chat.findOne({joinId : channel, agoraToken : {$exists : true}})
+                .then(response =>{
+
+                    if(!response){
+                        let chat = new Chat({
+                            joinId : channel,
+                            agoraToken : key
+                        });
+                        chat.save()
+                        .then(room =>{
+                            res.send({key, success : true, message : "message send successfully"});
+                        })
+                        .catch(error =>{
+                            console.log(error);
+                            next();
+                        })
+                    }
+                    else{
+                        res.send({key : response.agoraToken, success : true, message : "token fetched"});
+                    }
+                })
+                .catch(error =>{
+                    res.send({error, success : false, message: "DB error: token fetch"});
+                });
+            }
+        }
+    }
+    catch (error) {
+        res.send({ error: error, success: false, message: "Something went wrong while rtc token generation" })
+    }
+}
+
+
+module.exports.deleteAgoraToken = (req, res, next) =>{
+    try {
+        let {channel, key} = req.body;
+        Chat.deleteOne({joinId : channel, agoraToken : key})
+        .then(data =>{
+            if(data.deletedCount == 1){
+                res.send({data, success : true, message : "token deleted"});
+            }
+            else{
+                res.send({data, success : false, message : "failed: token delete"});
+            }
+        })
+        .catch(error =>{
+            res.send({error, success : false, message : "tokne delete error"});
+            next();
+        })    
     } 
     catch (error) {
-        
+        res.send({error, success : false, message : "something went wrong in token delete"});
     }
 }

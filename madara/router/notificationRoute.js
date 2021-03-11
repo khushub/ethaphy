@@ -7,4 +7,8 @@ router.post('/android', notificationHandler.sendAndroidNotification);
 
 router.post('/agoraToken/:token', notificationHandler.generateAgoraToken);
 
+router.post('/web/call', notificationHandler.webCall);
+
+router.post('/web/deleteToken', notificationHandler.deleteAgoraToken);
+
 module.exports = router;
