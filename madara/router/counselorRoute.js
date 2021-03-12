@@ -33,7 +33,9 @@ router.put('/disableSlotsByDate/:token', counselorHandler.disableSlotsByDate);
 
 router.post('/userUpcomingSessions/:token', counselorHandler.getUpcomingSessionsForaUser);
 
-// router.put('/cancelSession')
+router.post('/bookSession/:token',counselorHandler.bookSession);
+
+router.put('/cancelSession/:token', counselorHandler.cancelSession);
 
 
 // dashboard

@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const userHandler = require('../handlers/user');
 const Question = require('../models/questionModel');
-
+const Status = require('../models/status');
 
 router.get('/', userHandler.getQuestions);
 
@@ -49,6 +49,24 @@ router.post('/postQuestion', (req, res) =>{
     catch (error) {
       res.send({error : error, message : "DB error"})  ;
     }
+});
+
+
+router.post('/statusData', (req, res) =>{
+  const status = new Status({
+    active : req.body.active,
+    canceled : req.body.canceled,
+    missed : req.body.missed,
+    booked : req.body.booked,
+  });
+
+  status.save()
+  .then(doc =>{
+    res.send({doc, message : "status saved"});
+  })
+  .catch(error =>{
+    res.send({error, message :  "status data save error in db"});
+  })
 });
 
 

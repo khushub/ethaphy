@@ -317,7 +317,7 @@ module.exports.forgotPassword = async (req, res) => {
     })
   }
   catch (error) {
-    res.send({ error: error.message, message: 'Error at forgot password', success: true });
+    res.send({ error: error, message: 'Error at forgot password', success: true });
   }
 }
 
@@ -1267,10 +1267,10 @@ module.exports.bookSlots = async (req, res) => {
             counselorId: req.body.counselorId,
             userId: userId,
             date: req.body.date,
-            slots: {
+            slots: [{
               time: req.body.time,
               status: 0
-            }
+            }]
           });
           await slotData.save()
             .then(slot => {
@@ -1287,6 +1287,7 @@ module.exports.bookSlots = async (req, res) => {
     else {
       User.findById(userId)
         .then(user => {
+          // console.log("user")
           stripe.charges.create({
             amount: 2000,
             currency: 'usd',
@@ -1300,10 +1301,10 @@ module.exports.bookSlots = async (req, res) => {
                 counselorId: req.body.counselorId,
                 userId: userId,
                 date: req.body.date,
-                slots: {
+                slots: [{
                   time: req.body.time,
                   status: 0
-                }
+                }]
               });
               console.log(slotData);
               slotData.save()

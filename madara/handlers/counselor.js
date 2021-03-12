@@ -12,7 +12,8 @@ const Slot = require('../models/slotModel');
 const CounselorToUser = require('../models/counselorToUser');
 const OTP = require('../models/otpModel');
 const userModel = require('../models/userModel');
-const UpcomingSlots = require('../models/upcomingAvailability')
+const UpcomingSlots = require('../models/upcomingAvailability');
+// const counselorToUser = require('../models/counselorToUser');
 
 
 const storage = multer.diskStorage({
@@ -356,7 +357,8 @@ module.exports.uploadIntroVideo = async (req, res) =>{
  
 module.exports.addWeeklyAvailability = async (req, res) => {
   try {
-    let { userId } = jwt.decode(req.params.token); // sepearting userid of counselor from  token
+    // let { userId } = jwt.decode(req.params.token); // sepearting userid of counselor from  token
+        let userId = req.params.token;
     await Slot.deleteMany({ counselorId: userId })
       .then(result => {
         console.log("result", result);
@@ -596,13 +598,21 @@ module.exports.filterByDate = async (req, res) => {
 module.exports.getUpcomingSlots = async (req,res)=>{
   try {
     let { userId } = jwt.decode(req.params.token);
+    console.log("userid: ", userId);
     await UpcomingSlots.findOne({counselorId : userId})
-    .then(data =>{
-      data[0].availability = data[0].availability.filter(slot =>{
-        // console.log(new Date(slot.date).toLocaleDateString(), "     ", new Date().toLocaleDateString());
+    .then(doc =>{
+       let data = doc.availability.filter(slot =>{
+        // console.log("slosts: ", slot);
+        console.log(new Date(slot.date).toISOString().toString().substring(0,10), "  ",new Date());
         return new Date(slot.date).toLocaleDateString() >= new Date().toLocaleDateString();
       })
-      res.send({data : data[0].availability, success : true, message : "slot fetched from today onwards"});
+      
+      data = data.map(slots =>{
+        console.log("slots: ", slots);
+        return { day : slots.day, date : new Date(slots.date).toISOString().toString().substring(0,10),
+        status : slots.status =='active'? 0 : 1, slot : slots.slot}
+      })
+      res.send({data, success : true, message : "slot fetched from today onwards"});
     })
     .catch(error =>{
       res.send({error, success : false, message : "DB error: upcoming slot fetch"});
@@ -623,12 +633,14 @@ module.exports.forCalendar = async (req, res) =>{
     console.log("date: ", date);
     await CounselorToUser.find({counselorId : userId, date : {$gte : date}})
     .then(async doc =>{
+      console.log("doc: ", doc);
       console.log(doc.length);
       for(let i=0; i < doc.length; i++){
         await userModel.findById(doc[i].userId)
         .then(async user =>{
           // console.log("user: ", user.username, doc[i].date);
           data[i] = {
+            _id : doc[i]._id,
             name :  user.username,
             date : doc[i].date,
             slots : doc[i].slots
@@ -755,6 +767,60 @@ module.exports.disableSlotsByDate = async (req, res) => {
   }
   catch (error) {
     res.send({ error: error, success: false, message: "Invalid request or incorrect token" });
+  }
+}
+
+
+// book a session for a user fron counselor side
+
+module.exports.bookSession = (req, res) =>{
+  try {
+    let counselorId = jwt.decode(req.params.token).userId;
+    let{userId , time, date} = req.body;
+    CounselorToUser.findOne({counselorId : counselorId, userId : userId, date : date})
+    .then(doc =>{
+      if(doc != null){
+        let newSlot = {
+          time : time,
+          status : 3
+        }
+        doc.slots.push(newSlot);
+        // res.send({doc});
+        CounselorToUser.updateOne({_id : doc._id}, doc)
+        .then(bookedSession =>{
+          res.send({data : bookedSession, success : true, message : "booking confirmed"});
+        })
+        .catch(error =>{
+          res.send({error, success : false, message : "booking data save error"});
+        })
+      }
+      else{
+        // console.log("slot: in else ", slot)
+        let newSlot = {
+          time : time,
+          status : 3
+        }
+        let sessionData = new CounselorToUser({
+          counselorId : counselorId,
+          userId : userId,
+          date : date,
+          slots : [newSlot]
+        });
+        sessionData.save()
+        .then(bookedSession =>{
+          res.send({data : bookedSession, success : true, message : "booking confirmed"});
+        })
+        .catch(error =>{
+          res.send({error, success : false, message : "booking data save error"});
+        })
+      }
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "session data save error"});
+    })
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "unknown error"});
   }
 }
 
@@ -1028,7 +1094,10 @@ module.exports.getUpcomingSessionsForaUser =  (req, res) => {
     let date = new Date().toISOString().substring(0, 10);
     // console.log("counsleor id: ", counselorId, " userId: ", userId, " date is : ", date);
     CounselorToUser.find({ userId: userId,counselorId : counselorId, date : { $gte : date }})
-    .then(upcomingSessions =>{
+    .then(doc =>{
+      let upcomingSessions = [];
+      upcomingSessions[0] = doc[0];
+      // console.log("upcoming sessions: ", upcomingSessions);
       res.send({upcomingSessions , success : true, message : "you got your upcoming sessions for this user"});  
     })
     .catch(error =>{
@@ -1046,11 +1115,22 @@ module.exports.getUpcomingSessionsForaUser =  (req, res) => {
 // cancel a session of a particular user
 module.exports.cancelSession = (req, res) =>{
   try {
-    let counselorId = jwt.decode(req.params.token).userId;
-    console.log("hello");
+    // let counselorId = jwt.decode(req.params.token).userId;
+    let time = req.body.time;
+    let slotId = req.body.id;
+    CounselorToUser.updateOne({_id : slotId, "slots.time" : time}, 
+      {$set : {"slots.$.status" : 1}}, {new : true}
+      )
+      .then(doc =>{
+        console.log("doc: ", doc);
+        res.send({doc, success : true, message : "session canceled"});
+      })
+      .catch(error =>{
+        res.send({error, success : false, message : "DB error: session cancel from counselor side"});
+      })
   } 
   catch (error) {
-    res.send({error});
+    res.send({error, success : true, message : "unknown error"});
   }
 }
 
