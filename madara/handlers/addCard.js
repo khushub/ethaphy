@@ -23,9 +23,7 @@ module.exports.addCard = async (req, res) => {
             }
         }
          stripe.customers.create({
-             name : req.body.username,
              email : req.body.email,
-             address : req.body.address
          })
          .then(customer =>{
              console.log("customer: ", customer.id);
@@ -43,7 +41,7 @@ module.exports.addCard = async (req, res) => {
                                         capture: false,
                                         customer: customer.id
                                     })
-                                    .then(charge => {
+                                    .then(async charge => {
                                         console.log("charge: ",charge);
                                         let card = {
                                             cardId: source.id,
@@ -51,7 +49,10 @@ module.exports.addCard = async (req, res) => {
                                             expMonth: req.body.expMonth,
                                             expYear: req.body.expYear,
                                         }
-                                       let priceId = req.body.priceId ? req.body.priceId : 'price_1HtCMdHzA0lAtLhAMLfoUVSa'
+                                       let priceId = req.body.priceId ? req.body.priceId : 'price_1IWgouAOy5X6gCNNIrHTvK5F'
+                                       let user = jwt.decode(req.params.token).userId
+                                       let userData = await User.findById(user);
+
                                         stripe.subscriptions.create({
                                             customer: customer.id,
                                             items: [
@@ -59,7 +60,7 @@ module.exports.addCard = async (req, res) => {
                                                     price: priceId
                                                 },
                                             ],
-                                            trial_period_days: 0
+                                            trial_period_days: userData.trialCount == 1 ? 0 : 3
                                         })
                                             .then(subscription => {
                                                 console.log("subscriptions: ", subscription);
@@ -68,7 +69,7 @@ module.exports.addCard = async (req, res) => {
                                                 User.updateOne({ _id: userId},
                                                     {
                                                         $set: {
-                                                            status: 'trial',
+                                                            status: userData.trialCount == 1 ? 'active' : 'trial',
                                                             trialCount: 1,
                                                             cardDetails: card,
                                                             address: req.body.address,
@@ -82,7 +83,7 @@ module.exports.addCard = async (req, res) => {
                                                         res.send({
                                                             data: subscription,
                                                             success: false,
-                                                            message: "card added and status updated to trial"
+                                                            message: `card added and status updated to ${userData.trialCount == 1 ? 'active' : 'trial'}` 
                                                         });
                                                     })
                                                     .catch(error => {

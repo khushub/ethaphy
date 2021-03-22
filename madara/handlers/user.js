@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 
 // required models
-const Login = require('../models/loginModel');
+// const Login = require('../models/loginModel');
 const User = require('../models/userModel');
 const Question = require('../models/questionModel');
 // const StripeModel = require('../models/stripeModel');
@@ -33,6 +33,9 @@ module.exports.login = async function (req, res, next) {
     const { username, password } = req.body;
     console.log(req.body);
     
+    if(password.length < 6){
+      return res.send({message : "invalid length"});
+    }
     /* condition for email, password are not null */
 
     if (!username || !password) {
@@ -92,7 +95,7 @@ module.exports.login = async function (req, res, next) {
 
               const token = Helper.generateToken(userDetails._id);
               
-              if (!userDetails.stripeCustomerId) {
+              if (!userDetails.stripeCustomerId || !userDetails.subscriptionId) {
                 console.log("thread: ", thread, token, slotData);
                 const data = {
                   userDetails,
@@ -111,7 +114,9 @@ module.exports.login = async function (req, res, next) {
                   customer: customerId
                 })
                   .then(invoice => {
-                    let end_date = new Date(invoice.lines.data[0].period.start * 1000).toUTCString();
+                    console.log("invoices: ", invoice);
+                    // let end_date = new Date(invoice.lines.data[0].period.start * 1000).toUTCString();
+                    let end_date = new Date(invoice.period_end * 1000).toUTCString();
                     stripe.products.retrieve(
                       invoice.lines.data[0].plan.product
                     )
@@ -180,6 +185,10 @@ module.exports.createUser = async function (req, res) {
     if (!username || !email || !password) {
       return res.send({data : {}, error: "username or email or password is missing", success : false }).status(400);
     }
+
+    if(password.length < 6){
+      return res.send({success : false, message : "password length must be greater than or equal to 6"});
+    }
     // check if user exist
    await User.findOne({$and : [{email: req.body.email, username : req.body.username}]})
     .then(user =>{
@@ -208,7 +217,8 @@ module.exports.createUser = async function (req, res) {
             ready: req.body.ready,
             deleted: req.body.deleted,
             fcmToken : req.body.fcmToken,
-            nickName : req.body.nickName
+            nickName : req.body.nickName,
+            profilePhoto : "download.jpg"
           });
           user.save((error, userDetails) => {
             if (error) {
@@ -410,7 +420,6 @@ module.exports.resetPassword = (req, res) => {
 module.exports.getUserById = async(req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token);
-    
     await CounselorToUser.findOne({ userId: userId })
       .then(doc => {
         User.findById(userId, async (error, userDetails) => {
@@ -454,7 +463,7 @@ module.exports.getUserById = async(req, res) => {
               })
 
             // console.log("customerId: ", customerId);
-            if(!userDetails.stripeCustomerId){
+            if(!userDetails.stripeCustomerId || !userDetails.subscriptionId){
               const data = {
                 userDetails,
                 thread,
@@ -472,7 +481,8 @@ module.exports.getUserById = async(req, res) => {
                 customer: customerId
               })
                 .then(invoice => {
-                  let end_date = new Date(invoice.lines.data[0].period.end * 1000).toUTCString();
+                  console.log("inovce: ",invoice);
+                  let end_date = new Date(invoice.period_end * 1000).toUTCString();
                   stripe.products.retrieve(
                     invoice.lines.data[0].plan.product
                   )
@@ -557,7 +567,7 @@ const storage = multer.diskStorage({
     else{
       let originalname = file.originalname;
       let extension = originalname.split(".");
-      filename = Date.now() + "." + extension[extension.length - 1];
+      filename = Math.floor(Math.random()*1000000000) + "." + extension[extension.length - 1];
       cb(null, filename);
     }
   },
@@ -578,6 +588,20 @@ const upload = multer({ storage : storage, fileFilter :fileFilter }).single('ima
 
 // user profile picture upload section
 module.exports.profilePictureUpload = (req, res) => {
+  let storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      if(file.mimetype == 'image/jpeg' || file.mimetype == 'image/png'|| file.mimetype == 'image/jpg'){
+        cb(null,'./uploads/');
+      }
+    },
+    filename : (req, file, cb) =>{
+      let originalname = file.originalname;
+      let extension = originalname.split(".");
+      filename = Math.floor(Math.random()*1000000000) + "." + extension[extension.length - 1];
+      cb(null, filename);
+    }
+  })
+  let upload = multer({ storage : storage, fileFilter :fileFilter }).single('image');
   upload(req, res,(error) =>{
     console.log("req.file: ", req.file);
     if(error){
@@ -586,8 +610,8 @@ module.exports.profilePictureUpload = (req, res) => {
     else{
       try {
         
-        // let {userId} = jwt.decode(req.params.token);
-        let userId = req.params.token;
+        let {userId} = jwt.decode(req.params.token);
+        // let userId = req.params.token;
         console.log("req.file.filename: ", req.file.filename, userId);
         let imageData = {
           profilePhoto : req.file.filename
@@ -599,13 +623,6 @@ module.exports.profilePictureUpload = (req, res) => {
             }
             else{
               console.log("in else: ", req.file.filename, req.params.token);
-              Chat.updateMany({user_id : userId}, [{$set : {"user_image" : req.file.filename}}])
-              .then(data =>{
-                console.log("data: ", data);
-              }).
-              catch(error =>{
-                console.log("error: ", error);
-              })
               res.send({data : req.file.filename, message: "image uploaded", success: true }).status(201);
             }
           })
@@ -734,6 +751,7 @@ module.exports.attachment = (req, res) => {
               res.send({ data: {}, success: false, message: "No thread found" });
             }
             else {
+              console.log("thread: ", thread);
               let chatData = new Chat({
                 user_id: thread.userId,
                 username: thread.username,
@@ -801,7 +819,7 @@ module.exports.updateNickName = (req, res) => {
               if(error){
                 res.send({data : {}, error, success : false, message : "DB erro in nick name update"});
               }
-              res.send({data : result, message: "nick name uodated", success: true }).status(201);
+              res.send({data : result, message: "nick name updated", success: true }).status(201);
             })
             .catch(error => res.send({error, message: "DB error in nick name update", success: false }).status(201));
         }
@@ -934,6 +952,7 @@ module.exports.viewSinglePlan = async (req, res) => {
           .then(product => {
             console.log("products is: ", product);
             response.name = product.name;
+            response.priceId = req.body.priceId;
             res.send({ data: response, success: true, message: "Single plan details fetched" });
           })
           .catch(error => {
@@ -953,32 +972,47 @@ module.exports.viewSinglePlan = async (req, res) => {
 
 module.exports.getCurrentMembership = async (req, res) => {
   try {
-    let customerId = req.body.customerId;
-    console.log(customerId);
-    await stripe.invoices.list({
-      customer: customerId
-    })
-      .then(invoices => {
-        console.log("inovices: ",invoices);
-        stripe.invoices.retrieve(
-          invoices.data[0].id
-        )
-          .then(invoiceItem => {
-            let end_date = new Date(invoiceItem.lines.data[0].period.end * 1000).toUTCString();
-            stripe.products.retrieve(invoices.data[0].lines.data[0].price.product)
-              .then(product => {
-                let invoiceData = {
-                  amount_paid: invoiceItem.amount_paid,
-                  exp_date: end_date,
-                  plan_name: product.name
-                }
-                res.send({ data: invoiceData, success: true, message: "product fetched" });
-              });
-          });
+    // let customerId = req.body.customerId;
+    let {userId} = jwt.decode(req.params.token);
+    // let userId = req.params.token;
+    // console.log(customerId);
+    let user = await User.findById(userId);
+    console.log("user : ", user);
+    stripe.subscriptions.retrieve(
+      user.subscriptionId
+    )
+    .then(async subscription =>{
+      console.log("subscription: ", subscription);
+      console.log(subscription.latest_invoice);
+      stripe.invoices.retrieve(
+        subscription.latest_invoice
+      )
+      .then(async invoice =>{
+        console.log("invoice: ", invoice);
+        // let end_date = new Date(invoice.lines.data[0].period.end * 1000).toUTCString();
+        let end_date = new Date(subscription.current_period_end* 1000).toUTCString();
+        console.log("end dtae: ", end_date);
+        let product = await stripe.products.retrieve(subscription.items.data[0].plan.product);
+        console.log("product: ", product);
+        // console.log("description: ",invoice.lines.data[1].description)
+        let data = {
+          exp_date : end_date,
+          amount_paid : invoice.amount_paid,
+          plan_name: product.name,
+          interval : subscription.items.data[0].price.recurring.interval,
+          priceId : subscription.items.data[0].price.id,
+        //   description : invoice.lines.data[1].description ? invoice.lines.data[1].description : " " 
+        }
+        res.send({data,invoice, subscription});
       })
-      .catch(error => {
-        res.send({ error, success: false, message: "stripe inovice fetch error" });
-      });
+      .catch(error =>{
+        res.send({error, success : false, message : "might be stripe error"});
+      })
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "stripe error"});
+    })
+    // res.send({user});
   }
   catch (error) {
     res.send({ error, success: false, message: "something went wrong while invoice collection" });
@@ -1062,8 +1096,7 @@ module.exports.updatePlan = (req, res) =>{
                 price: req.body.priceId,
                 id : subscription.items.data[0].id
               }],
-              trial_end: 'now',
-              billing_cycle_anchor: 'now'
+              trial_end: 'now'
             }
           )
           .then(subscription => {
@@ -1196,12 +1229,19 @@ module.exports.updateCard = async (req, res) => {
       stripe.customers.createSource(req.body.stripeCustomerId, { source: stripeToken })
         .then(card => {
           console.log("card", card.id);
+          
           stripe.customers.updateSource(
             req.body.stripeCustomerId,
             card.id
           )
+          let cardData = {
+            number: req.body.cardNumber,
+            expMonth: req.body.expMonth,
+            expYear: req.body.expYear,
+            cardId : card.id
+          }
           User.updateOne({ stripeCustomerId: req.body.stripeCustomerId },
-            { $set: { cardDetails: cardDetails }},{upsert : true, new : true})
+            { $set: { cardDetails: cardData }},{upsert : true, new : true})
             .then(result => {
               console.log("result", result);
               res.send({ data: result, success: true, message: "card details updated" });
@@ -1232,8 +1272,17 @@ module.exports.bookSlots = async (req, res) => {
   try {
     // console.log(req.body);
     let { userId } = jwt.decode(req.params.token);
+    let date = req.body.date;
+    let time = req.body.time;
+    let date1 = new Date(date.substring(0,4),date.substring(5,7),
+    date.substring(8,10),time.substring(0,2),time.substring(3,5));
+    let date2 = new Date(date.substring(0,4),date.substring(5,7),
+    date.substring(8,10),time.substring(6,8),time.substring(10,11));
+    time = `${date.getUTCHours()}:${date.getUTCMinutes()}-${date.getUTCHours()}:`
+    // console.log("date is: ",date);
+    date = `${date.getUTCFullYear()}-${date.getUTCMonth()+1}-${date.getUTCDate()}`;
+    console.log("date is: ",date, " timeis: ", time.substring(6,7),time.substring(8,9));
     if (!req.body.stripeCustomerId) {
-      console.log("in if condition");
       const customer = await stripe.customers.create({
         email: req.body.email,
         name: req.body.username,
@@ -1262,18 +1311,23 @@ module.exports.bookSlots = async (req, res) => {
         description: 'One time payment ',
       })
         .then(async (charge) => {
-          console.log("charge: ", charge);
           const slotData = new CounselorToUser({
             counselorId: req.body.counselorId,
             userId: userId,
             date: req.body.date,
             slots: [{
               time: req.body.time,
-              status: 0
+              status: 3
             }]
           });
           await slotData.save()
             .then(slot => {
+              UpcomingSlots.updateOne({ counselorId: req.body.counselorId },
+                { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                { arrayFilters: [{ 'a.date': date }, { 's.time': req.body.time }] })
+                .then(result =>{
+                  console.log(result);
+                });
               res.send({ data: slot, success: false, message: "session book success" });
             })
             .catch(error => {
@@ -1296,19 +1350,25 @@ module.exports.bookSlots = async (req, res) => {
             description: 'My First Test Charge (created for API docs)',
           })
             .then(charge => {
-              console.log("charge: ", charge);
+              // console.log("charge: ", charge);
               const slotData = new CounselorToUser({
                 counselorId: req.body.counselorId,
                 userId: userId,
                 date: req.body.date,
                 slots: [{
                   time: req.body.time,
-                  status: 0
+                  status: 3
                 }]
               });
-              console.log(slotData);
+              // console.log(slotData);
               slotData.save()
                 .then(document => {
+                  UpcomingSlots.updateOne({ counselorId: req.body.counselorId },
+                    { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                    { arrayFilters: [{ 'a.date': date }, { 's.time': req.body.time }] })
+                    .then(result =>{
+                      console.log("result: ", result);
+                    });
                   res.send({ document, success: true, message: "slot book success" });
                 })
                 .catch(error => {
@@ -1328,6 +1388,38 @@ module.exports.bookSlots = async (req, res) => {
     res.send({ error, success: false, message: " Something went wrong in book slot data save" });
   }
 }
+
+
+
+// get upcoming sessions of a user
+
+module.exports.getUpcomingSessions = (req, res) => {
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    // let userId = req.params.token;
+    let date = new Date().toISOString().substring(0, 10);
+    // console.log("counsleor id: ", counselorId, " userId: ", userId, " date is : ", date);
+    CounselorToUser.find({ userId: userId, date: { $gte: date } })
+      .then(upcomingSessions => {
+        if (upcomingSessions.length == 0) {
+          res.send({upcomingSessions : {}, success : false, message : "no booking found"});
+        }
+        else {
+          // console.log("upcoming sessions: ", upcomingSessions);
+          res.send({ upcomingSessions, success: true, message: "you got your upcoming sessions for this user" });
+        }
+      })
+      .catch(error => {
+        res.send({ error, success: false, message: "DB error in upcoming session find" });
+      })
+  }
+  catch (error) {
+    res.send({ error, success: false, message: "unknown error" });
+  }
+}
+
+
+
 
 
 
@@ -1366,15 +1458,26 @@ module.exports.getActiveSlots = async (req, res) =>{
 
 module.exports.getActiveSlotByDate = async (req, res) =>{
   try {
-    let counselorId = req.body.counselorId;
-    // console.log("date: ", req.body);
-    let date = new Date(req.body.date).toDateString();
-    // console.log("date is: ", date, " counselor id: ", counselorId);
+    console.log("date: ", req.body);
+    let {userId} = jwt.decode(req.params.token);
+    console.log("thread id ", userId);
+    Chat.find({user_id : userId}).sort({_id : -1}).limit(1)
+    .then(async thread =>{
+      console.log("thread: ", thread[0].counsellor_id);
+      let date = new Date(req.body.date).toUTCString().substring(0,16);
+    // console.log("date is: ", date, " counselor id: ", thread[0].counsellor_id);
     const slots = await UpcomingSlots.findOne(
-      {counselorId : counselorId},
+      {counselorId : thread[0].counsellor_id},
       {availability : {$elemMatch : {date : date}}}
       );
-    res.send({slots});
+      if(slots){
+        console.log("in ths block");
+        res.send({response : slots.availability, success : true, message : "slots fetched"});
+      }
+      else{
+        res.send({response : {}, success : false, message : "no slot found for this date/counselor"});
+      }
+    })
   } 
   catch (error) {
     res.send({error, success : false, message : "unknown error: get slots for a date"});
@@ -1387,20 +1490,49 @@ module.exports.getActiveSlotByDate = async (req, res) =>{
 
 module.exports.cancelSession = (req, res) =>{
   try {
-    let { userId } = req.params.token;
-    console.log(userId);
-    const slot = {
-      date : req.body.date,
-      time : [req.body.time]
-    }  
+    // let counselorId = jwt.decode(req.params.token).userId;
+    let time = req.body.time;
+    let slotId = req.body.id;
+    CounselorToUser.updateOne({_id : slotId, "slots.time" : time}, 
+      {$set : {"slots.$.status" : 1}}, {new : true}
+      )
+      .then(doc =>{
+        console.log("doc: ", doc);
+        res.send({doc, success : true, message : "session canceled"});
+      })
+      .catch(error =>{
+        res.send({error, success : false, message : "DB error: session cancel from counselor side"});
+      })
   } 
   catch (error) {
-    res.send({error});
+    res.send({error, success : true, message : "unknown error"});
   }
 }
 
 
+const TestData = require('../models/testData');
 
+module.exports.getData = (req, res) =>{
+  try {
+    let username = req.body.username;
+    let token = req.body.token;
+    console.log("token is: ", token, " and username: ", username);
+    const test = new TestData({
+      username : username,
+      data : token
+    })
+    test.save()
+    .then(doc =>{
+      res.send({doc});
+    })
+    .catch(error =>{
+      res.send({error})
+    })
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "unknown error"});
+  }
+}
 
 
 

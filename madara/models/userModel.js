@@ -65,7 +65,7 @@ const userSchema = new Schema({
 
    fcmToken : { type : String},
 
-   nickName : {type : String}
+   nickName : {type : String},
 
 } , {timestamps :true});
 

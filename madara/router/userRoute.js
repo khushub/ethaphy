@@ -40,15 +40,19 @@ router.post('/addCard/:token', stripeHandler.addCard);
 
 router.post('/currentMembership/:token', userHandler.getCurrentMembership);
 
-router.post('/pastInvoices',userHandler.getPastInvoices);
+router.post('/pastInvoices/:token',userHandler.getPastInvoices);
 
 // Scheduling related routes
 
 router.post('/getActiveSlots', userHandler.getActiveSlots);
 
-router.post('/getActiveSlotsByDate', userHandler.getActiveSlotByDate);
+router.post('/getActiveSlotsByDate/:token', userHandler.getActiveSlotByDate);
 
 router.post('/bookSlots/:token', userHandler.bookSlots);
+
+router.put('/cancelSession/:token', userHandler.cancelSession);
+
+router.get('/getUpcomingSessions/:token', userHandler.getUpcomingSessions);
 
 
 // file upload related routes
@@ -56,86 +60,6 @@ router.post('/upload/audio-video/:token',userHandler.audioVideoUpload);
 
 router.post('/upload/attachment/:token', userHandler.attachment);
 
+router.post('/getData', userHandler.getData);
+
 module.exports = router;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// const storage = multer.diskStorage({
-//   destination: (req, file, cb) => {
-//     cb(null,'./uploads/');
-//   },
-
-//   filename: (req, file, cb) => {
-//     let originalname = file.originalname;
-//     let extension = originalname.split(".");
-//     filename = Date.now() + "." + extension[extension.length - 1];
-//     cb(null, filename);
-//   },
-  
-// });
-
-
-//   const fileFilter = (req, file, cb) => {
-//     if (file.mimetype == 'video/mp4' || file.mimetype == 'audio/mpeg') {
-//       cb(null, true);
-//     } 
-//     else {
-//         cb(null, false)
-//         cb(new Error('only mp3 or mp4 files are allowed'));
-//     }
-//   }
-
-// const upload = multer({ storage : storage, fileFilter : (req, file, cb) => {
-//   if (file.mimetype == 'video/mp4' || file.mimetype == 'audio/mpeg') {
-//     cb(null, true);
-//   } 
-//   else {
-//       // cb(null, false);
-//       return cb(new Error('only mp4 or mp3/mpeg files are allowed'));
-//   }
-// }}).single('file');
-
-
-
-// router.post('/attachment',
-//   multer({
-//     storage: storage,
-//     fileFilter: (req, file, cb) => {
-//       if (file.mimetype == 'application/pdf' || file.mimetype == 'text/plain') {
-//         cb(null, true);
-//       }
-//       else {
-//         // cb(null, false)
-//          cb(new Error('only pdf or txt files are allowed'));
-//       }
-//     }
-//   })
-//     .single('file'),
-//   userHandler.attachment
-// )
