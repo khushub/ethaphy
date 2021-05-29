@@ -59,13 +59,29 @@ const userSchema = new Schema({
 
    stripeCustomerId : {type : String},
 
-   subscriptionId : { type : String },
+   subscriptionId : { type : String},
 
    trialCount : {type : Number, default : 0},
 
    fcmToken : { type : String},
 
    nickName : {type : String},
+
+   cardDetails : { type : Object, default : null},
+
+   creditCount : {type : Number, default : 0},
+
+   counselorId : { type : String},
+
+   joinId : { type : String},
+
+   planExpireDate : { type : Number},
+
+   planStartDate : { type : Number},
+
+   isCanceled : { type : Boolean},
+
+   priceId : { type : String}
 
 } , {timestamps :true});
 

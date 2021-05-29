@@ -15,6 +15,33 @@ var logger = require('log4js').configure({  // Logger
 	categories: { default: { appenders: ['app'], level: 'error' } }
 }).getLogger();
 
+const User = require('./madara/models/userModel');
+
+// let request = require('request');
+
+// let headers = {
+// 	'webpushrKey': '3ea275cdaa68c9a8608cf2f6eaecc628',
+//     'webpushrAuthToken': '27462',
+//     'Content-Type': 'application/json'
+// };
+
+// let dataString = '{"title":"title","message":"notification message","target_url":"https://user.kushubmedia.com"}';
+
+// let options = {
+//     url: 'https://api.webpushr.com/v1/notification/send/all',
+//     method: 'POST',
+//     headers: headers,
+//     body: dataString
+// };
+
+// function callback(error, response, body) {
+//     if (!error && response.statusCode == 200) {
+//         console.log(body);
+//     }
+// }
+
+// request(options, callback);
+
 // required module
 const myEnv = require('dotenv').config();
 const secretKey = myEnv.parsed.STRIPE_KEY;
@@ -40,6 +67,8 @@ const stripePlanRoute = require('./madara/router/stripePlanRoute');
 
 const notificationRoute = require('./madara/router/notificationRoute');
 
+const adminRoute = require('./madara/router/adminRoute');
+
 // const subscribePlanRoute = require('./madara/router/subscriberRoute');
 
 var port = 4003;   // Port used for user server
@@ -50,10 +79,14 @@ const admin = require("firebase-admin");
 const serviceAccount = require('./privateKey.json');
 
 
+app.set('view engine', 'hbs');
+app.set('views', './madara/views');
+
 app.use(device.capture());
 app.use(cors());
 app.use(express.urlencoded({extended : false}));
 app.use(bodyParser.urlencoded({ extended: true }));
+// app.use(bodyParser.urlencoded({limit: "50mb", extended: true, parameterLimit:50000}));
 var dir = path.join(__dirname, 'uploads');
 
 app.use(express.static(dir));
@@ -72,10 +105,35 @@ app.use((req, res, next) => {
 		// console.log("original url: ", req.originalUrl);
 		next();
 	} else {
-		bodyParser.json()(req, res, next);
+		express.json()(req, res, next);
 	}
 });
 
+function checkUserStatus(){
+	let todayDate = new Date(Date.now()).toISOString().substring(0,10);
+	console.log("today date: ", todayDate);
+	User.find({ isCanceled : true})
+	.then(users =>{
+		for(let i = 0; i < users.length; i++){
+			let expireDate = new Date(users[i].planExpireDate *1000).toISOString().substring(0,10)
+			console.log("user.planexpiredate: ", expireDate);
+			if(todayDate >= expireDate){
+				User.updateOne({_id : users[i]._id}, { $set : { status : 'inactive'}})
+				.then(doc =>{
+					console.log("user status updated: ", doc);
+				})
+				.catch(error =>{
+					console.log("error in user status update: ", error);
+				})
+			}
+		}
+	})
+	.catch(error =>{
+		console.log(error);
+	})
+}
+
+setInterval(checkUserStatus, 86400000)
 
 logger.level = 'error';
 
@@ -86,6 +144,8 @@ app.use('/user', userRoute);
 app.use('/data', questionRoute);
 
 app.use('/counselor', counselorRoute);
+
+app.use('/admin', adminRoute);
 
 // app.use('/addCard', addCardRoute);
 

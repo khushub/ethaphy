@@ -1,16 +1,23 @@
 // required modules
+const myEnv = require('dotenv').config();
+
 var mongoose = require('mongoose');
 var logger = require('log4js').getLogger();
 const Helper = require('./helper');
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
+const fs = require('fs');
+const path = require('path');
+
+
+// require util file
+const mailSend = require('./util');
+
 
 // required models
 // const Login = require('../models/loginModel');
 const User = require('../models/userModel');
 const Question = require('../models/questionModel');
-// const StripeModel = require('../models/stripeModel');
 const OTP = require('../models/otpModel');
 const CounselorToUser = require('../models/counselorToUser');
 const Counselor = require('../models/counselorModel');
@@ -20,12 +27,11 @@ const Chat = require('../models/chatModel');
 
 // required Stripe modules 
 
-const myEnv = require('dotenv').config();
+// const myEnv = require('dotenv').config();
 const secretKey = myEnv.parsed.STRIPE_KEY;
-
 const Stripe = require('stripe');
-const counselorModel = require('../models/counselorModel');
 const stripe = Stripe(secretKey);
+
 
 
 module.exports.login = async function (req, res, next) {
@@ -84,14 +90,14 @@ module.exports.login = async function (req, res, next) {
 
       // Chat related data
       let thread = {};
-      await Chat.findOne({ user_id: userDetails._id })
+      await Chat.findOne({ user_id: userDetails._id, agoraToken : {$exists : false}})
         .then(async (data) => {
           await Counselor.findById(data.counsellor_id)
             .then(result => {
               thread.counselorId = data.counsellor_id;
               thread.joinId = data.joinId;
-              thread.counselorname = data.counsellorname;
-              thread.counselorImage = result.photo
+              thread.counsellorname = data.counsellorname;
+              thread.counselorImage = result.photo ? result.photo : " "
 
               const token = Helper.generateToken(userDetails._id);
               
@@ -218,13 +224,21 @@ module.exports.createUser = async function (req, res) {
             deleted: req.body.deleted,
             fcmToken : req.body.fcmToken,
             nickName : req.body.nickName,
-            profilePhoto : "download.jpg"
+            profilePhoto : "download.jpg",
+            counselorId : "5fc9cb88db493e26f44e9622",
           });
           user.save((error, userDetails) => {
             if (error) {
               res.send({data : {}, error: error.message, message: "username or email already taken" }).status(500);
             }
             else{
+              let newData = {
+                joinId : userDetails._id +"-" + "5fc9cb88db493e26f44e9622"
+              }
+              User.updateOne({_id : userDetails._id}, newData)
+              .then(updatedUser =>{
+                console.log("join id attached to user");
+              })
                 let dummyAssignedData = new CounselorToUser({
                   counselorId : "5fc9cb88db493e26f44e9622",
                   userId : userDetails.id
@@ -251,6 +265,20 @@ module.exports.createUser = async function (req, res) {
                         token,
                         thread : chat,
                         counselorImage : "1609912613626.jpg"
+                      }
+                      const emailTemplate = fs.readFileSync(path.join(__dirname, '../views/registerUser.hbs'), "utf8");
+                      let templateData = {
+                        username: userDetails.username,
+                      }
+                      let mailData = {
+                        subject: 'Successfully Registeration',
+                        to: userDetails.email
+                      }
+                      if (mailSend.sendMail(mailData, templateData, emailTemplate)){
+                        console.log("email sent");
+                      }
+                      else{
+                        console.log("email not sent")
                       }
                       res.send({ data: data, success: true, message: "User Registered Successfully" });
                   })
@@ -282,89 +310,104 @@ module.exports.createUser = async function (req, res) {
 
 
 
+
+
 // forgot password functionality
 
 module.exports.forgotPassword = async (req, res) => {
   try {
     const email = req.body.email;
-    await User.findOne({ email: email }, async (error, doc) => {
-      if (error || !doc) {
-        res.send({ error: error, success: false, message: 'DB error: no user exists' });
+    const user = await User.findOne({ email: email });
+    // console.log("user: ", user);
+    if (!user) {
+      return res.send({ response: {}, success: false, message: "No user exist with this email" });
+    }
+    else {
+      let otp = Math.floor(Math.random() * 100000);
+
+      const emailTemplate = fs.readFileSync(path.join(__dirname, '../views/sendOtp.hbs'), "utf8");
+
+      // data to be send to template
+      let templateData = {
+        email: user.username,
+        otp: otp
+      }
+      let mailData = {
+        subject: 'OTP for reset password',
+        to: user.email
+      }
+      
+      // let response = mailSend.sendMail(mailData, templateData, emailTemplate);
+      console.log("response: ", mailSend.sendMail(mailData, templateData, emailTemplate));
+      if (mailSend.sendMail(mailData, templateData, emailTemplate)) {
+        OTP.findOneAndUpdate({ email: email }, { email: email, otp: otp }, { upsert: true, new: true })
+          .then(doc => {
+            res.send({ response: doc, success: true, message: "OTP sent to your mail" });
+          })
+          .catch(error => {
+            res.send({ error, success: false, message: "DB error in otp data save" });
+          })
       }
       else {
-        // console.log("doc: ", doc);
-        let otp = Math.floor(Math.random() * 100000);
-        let mailTransport = await nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            user: 'jfrandz85@gmail.com',
-            pass: 'Jackson@123'
-          }
-        });
-
-        let mailDetails = {
-          from: 'jfrandz85@gmail.com',
-          to: email,
-          subject: 'Test mail',
-          text: otp.toString()
-        }
-        console.log(" maildetails: ", mailDetails);
-        await mailTransport.sendMail(mailDetails, async (error, response)=>{
-          if(error || !response){
-            res.send({error : error, success : false, message: "Error in mail send : OTP" });
-          }
-          else{
-            OTP.findOneAndUpdate({email : email}, {email : email, otp : otp}, {upsert : true, new : true})
-            .then(doc =>{
-              res.send({response : response, success : true, message : "OTP sent to your mail"});
-            })
-            .catch(error=>{
-              res.send({error, success : false, message : "DB error in otp data save"});
-            })
-          }
-        })
+        res.send({ response: {}, success: false, message: "mail send error" });;
       }
-    })
+    }
   }
   catch (error) {
-    res.send({ error: error, message: 'Error at forgot password', success: true });
+    res.send({ error: error, message: 'Error at forgot password', success: false });
   }
 }
 
 
 // OTP Verification
 
-module.exports.verifyOTP = (req, res) =>{
+module.exports.verifyOTP = async(req, res) => {
   try {
-    OTP.findOne({email : req.body.email})
-    .then(doc =>{
-      if(doc.otp === req.body.otp){
-        let password = req.body.password;
-        let confirmPassword = req.body.confirmPassword;
-        if(password === confirmPassword){
-          password = Helper.hashPassword(password);
-          User.findOneAndUpdate({email : req.body.email}, {password : password}, {new : true})
-          .then(user =>{
-            res.send({data : user, success : true, message : "Password update success"});
-          })
-          .catch(error =>{
-            res.send({error, success : false, message : "DB error: password update"});
-          })
+    let user = await User.findOne({email : req.body.email});
+    if(!user) return res.send({data : {}, success : false, message : "DB error"});
+    OTP.findOne({ email: req.body.email })
+      .then(doc => {
+        if (doc.otp === req.body.otp) {
+          let password = req.body.password;
+          let confirmPassword = req.body.confirmPassword;
+          if (password === confirmPassword) {
+            password = Helper.hashPassword(password);
+            User.findOneAndUpdate({ email: req.body.email }, { password: password }, { new: true })
+              .then(user => {
+                const emailTemplate = fs.readFileSync(path.join(__dirname, '../views/passwordUpdated.hbs'), "utf8");
+                let templateData = {
+                  username: user.username,
+                }
+                let mailData = {
+                  subject: 'Password Updated',
+                  to: user.email
+                }
+                if (mailSend.sendMail(mailData, templateData, emailTemplate)) {
+                  console.log("email sent");
+                }
+                else {
+                  console.log("email not sent")
+                }
+                res.send({ data: user, success: true, message: "Password update success" });
+              })
+              .catch(error => {
+                res.send({ error, success: false, message: "DB error: password update" });
+              })
+          }
+          else {
+            res.send({ data: {}, success: false, message: "mismatch password and confirmPassword" });
+          }
         }
-        else{
-          res.send({data : {},success : false, message : "mismatch password and confirmPassword"});
+        else {
+          res.send({ success: false, message: "incorrect otp" });
         }
-      }
-      else{
-        res.send({success : false, message : "incorrect otp"});
-      }
-    })
-    .catch(error =>{
-      res.send({error, success : false, message : "DB error: no user found"});
-    })  
-  } 
+      })
+      .catch(error => {
+        res.send({ error, success: false, message: "DB error: no user found" });
+      })
+  }
   catch (error) {
-    res.send({error, success : false, message : "unknown error: forgot password"});
+    res.send({ error, success: false, message: "unknown error: forgot password" });
   }
 }
 
@@ -404,6 +447,21 @@ module.exports.resetPassword = (req, res) => {
               }
               else{
                 res.send({data : doc, success : true, message : 'password reset successfully'}).status(200);
+                const emailTemplate = fs.readFileSync(path.join(__dirname, '../views/passwordUpdated.hbs'), "utf8");
+                let templateData = {
+                  username: user.username,
+                }
+                let mailData = {
+                  subject: 'Password Updated',
+                  to: user.email
+                }
+                if (mailSend.sendMail(mailData, templateData, emailTemplate)) {
+                  console.log("email sent");
+                }
+                else {
+                  console.log("email not sent")
+                }
+                
               }
             })
           }
@@ -451,8 +509,8 @@ module.exports.getUserById = async(req, res) => {
                 .then(result =>{
                     thread.counselorId = data.counsellor_id;
                     thread.joinId = data.joinId;
-                    thread.counselorname = data.counsellorname;
-                    thread.counselorImage = result.photo
+                    thread.counsellorname = data.counsellorname;
+                    thread.counselorImage = result.photo ? result.photo : " "
                 })
                 .catch(error =>{
                   res.send({error, success : false, message : "DB error: thread data fetch error"});
@@ -462,8 +520,9 @@ module.exports.getUserById = async(req, res) => {
                 res.send({ error, success: false, message: "Thread data fetch error" });
               })
 
-            // console.log("customerId: ", customerId);
-            if(!userDetails.stripeCustomerId || !userDetails.subscriptionId){
+            console.log("customerId: ", userDetails.isCanceled, userDetails.stripeCustomerId);
+            if(!userDetails.stripeCustomerId || userDetails.isCanceled == true){
+              console.log("in if condition: ", userDetails.isCanceled);
               const data = {
                 userDetails,
                 thread,
@@ -531,13 +590,10 @@ module.exports.getUserById = async(req, res) => {
 // file upload module
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    if(file.mimetype == 'image/jpeg' || file.mimetype == 'image/png'|| file.mimetype == 'image/jpg'){
-      cb(null,'./uploads/');
-    }
     if(file.mimetype == 'video/mp4'|| file.mimetype == 'video/x-matroska'){
       cb(null,'./uploads/user/videos');
     }
-    if(file.mimetype == 'audio/mpeg' || file.mimetype == 'audio/mp3'){
+    if(file.mimetype == 'audio/mpeg' || file.mimetype == 'audio/mp3' || file.mimetype == 'audio/x-m4a'){
       cb(null,'./uploads/user/audios');
     }
     if(file.mimetype == 'application/pdf' || file.mimetype == 'image/jpeg' || 
@@ -548,13 +604,19 @@ const storage = multer.diskStorage({
   },
 
   filename: (req, file, cb) => {
-  	console.log("file: ", req.file , " ", file);
+  	// console.log("file: ", req.file , " ", file);
     if(file.mimetype === 'audio/mp3' || file.mimetype === 'audio/mpeg' || 
-      file.mimetype == 'video/mp4'|| file.mimetype == 'video/x-matroska'){
+      file.mimetype == 'video/mp4'|| file.mimetype == 'video/x-matroska' || file.mimetype == 'audio/x-m4a'){
       let originalname = file.originalname;
       let extension = originalname.split(".");
       console.log("extension: ", extension);
-      if(extension[extension.length - 1] == 'mp3'){
+      if(extension[extension.length - 1] == 'mp3' ||extension[extension.length - 1] == 'm4a' || 
+          extension[extension.length - 1] == 'mpeg'){
+        filename = Date.now() + "." + extension[extension.length - 1];
+        console.log("file name: in if ", filename);
+        cb(null, filename);
+      }
+      else if(extension[extension.length - 1] == 'mp4'){
         filename = Date.now() + "." + extension[extension.length - 1];
         cb(null, filename);
       }
@@ -568,11 +630,11 @@ const storage = multer.diskStorage({
       let originalname = file.originalname;
       let extension = originalname.split(".");
       filename = Math.floor(Math.random()*1000000000) + "." + extension[extension.length - 1];
+      console.log("filename: in else : ", filename);
       cb(null, filename);
     }
   },
 });
-
 
 const fileFilter = (req, file, cb) => {
   if (file.mimetype == 'image/jpeg' || file.mimetype == 'image/png' || file.mimetype == 'image/jpg') {
@@ -638,68 +700,85 @@ module.exports.profilePictureUpload = (req, res) => {
 
 module.exports.audioVideoUpload = async (req, res) => {
   try {
-    let fileSize = 20 * 1024 * 1024;
-    const fileFilter = (req, file, cb) => {
-      // console.log("file.mimetype: ", file);
-      if (!file.mimetype || file.mimetype == undefined) {
-        res.send({ success: false, message: "error: undefined file" });
-      }
-      else {
-        // if (file.mimetype == 'video/mp4' || file.mimetype == 'audio/mpeg' ||
-        //   file.mimetype === 'video/x-matroska' || file.mimetype == 'audio/mp3') {
-        //   cb(null, true);
-        // }
-        // else {
-        //   // cb(null, false);
-        //   return cb(new Error('only mp4 or mp3/mpeg files are allowed'));
-        // }
-        cb(null, true);
-      }
+    let { userId } = jwt.decode(req.params.token);
+    let userDetails = await User.findOne({ _id: userId });
+    // console.log("userDetails: ", userDetails);
+    if (userDetails && userDetails.subscriptionId == null) {
+      return res.send({ success: false, message: "please purchase any plan" });
     }
-    const upload = multer({
-      storage: storage,
-      fileFilter: fileFilter,
-      limits: { fileSize: fileSize }
-    }).single('file');
-    upload(req, res, (error) => {
-      if (error) {
-        res.send({ error, success: false, message: "only mp4 or mp3/mpeg files are allowed" });
+    else {
+      let fileSize = 20 * 1024 * 1024;
+      const fileFilter = (req, file, cb) => {
+        // console.log("file.mimetype: ", file);
+        if (!file.mimetype || file.mimetype == undefined) {
+          res.send({ success: false, message: "error: undefined file" });
+        }
+        else {
+          // console.log("in else");
+          if (file.mimetype == 'video/mp4' || file.mimetype == 'audio/mpeg' ||
+            file.mimetype === 'video/x-matroska' || file.mimetype == 'audio/mp3' || file.mimetype == 'audio/x-m4a') {
+            // console.log("cb null true:", cb(null,true));
+            cb(null, true);
+          }
+          else {
+            // cb(null, false);
+            return cb(new Error('only mp4 or mp3/mpeg files are allowed'));
+          }
+          // console.log("cb(null, true);", cb(null, true));
+          // cb(null, true);
+        }
       }
-      else {
-        console.log("file.mimetype: ", req.body);
-        let { userId } = jwt.decode(req.params.token);
-        Chat.findOne({ joinId: req.body.joinId })
-          .then(thread => {
-            let chatData = new Chat({
-              user_id: thread.userId,
-              username: thread.username,
-              user_image: thread.user_image ? thread.user_image : "",
-              counsellor_id: thread.counsellor_id,
-              counsellorname: thread.counsellorname,
-              joinId: req.body.joinId,
-              message: req.file.mimetype === 'audio/mp3' || req.file.mimetype === 'audio/mpeg' ? "audios/" + req.file.filename : "videos/" + req.file.filename,
-              fileupload: req.file.mimetype,
-              message_type: req.file.mimetype === 'audio/mp3' || req.file.mimetype === 'audio/mpeg' ? "audio" : "video",
-              time: Date.now(),
-              id: thread.id,
-              role: thread.role,
-              messageAudio: req.body.messageAudio
-            });
-            chatData.save()
-              .then(doc => {
-                console.log("doc: ", doc);
-                res.send({
-                  data: doc.fileupload,
-                  success: true,
-                  message: "you just uploaded a file"
-                });
-              })
-              .catch(error => {
-                res.send({ error, success: false, message: "DB error: file data save error" });
-              })
-          })
-      }
-    })
+      const upload = multer({
+        storage: storage,
+        fileFilter: fileFilter,
+        limits: { fileSize: fileSize }
+      }).single('file');
+      upload(req, res, (error) => {
+        if (error) {
+          res.send({ error, success: false, message: "only mp4 or mp3/mpeg files are allowed" });
+        }
+        else {
+          console.log("req.file: ", req.file);
+          // getAudioDurationInSeconds(req.file.originalname)
+          // .then(duration =>{
+          //   console.log("duratiob: ", duration);
+          // })
+          Chat.findOne({ joinId: req.body.joinId, agoraToken : {$exists : false}})
+            .then(thread => {
+              console.log("thread: ", thread);
+              let chatData = new Chat({
+                user_id: req.body.user_id,
+                username: thread.username,
+                user_image: thread.user_image ? thread.user_image : "",
+                counsellor_id: thread.counsellor_id,
+                counsellorname: thread.counsellorname,
+                joinId: req.body.joinId,
+                message: req.file.mimetype === 'audio/mp3' || req.file.mimetype === 'audio/mpeg' ||
+                  req.file.mimetype === 'audio/x-m4a' ? "audios/" + req.file.filename : "videos/" + req.file.filename,
+                fileupload: req.file.mimetype,
+                message_type: req.file.mimetype === 'audio/mp3' || req.file.mimetype === 'audio/mpeg' ? "audio" : "video",
+                time: Date.now(),
+                id: thread.id,
+                role: req.body.role,
+                messageAudio: req.body.messageAudio,
+                visible : false
+              });
+              chatData.save()
+                .then(doc => {
+                  console.log("doc: ", doc);
+                  res.send({
+                    data: doc.fileupload,
+                    success: true,
+                    message: "you just uploaded a file"
+                  });
+                })
+                .catch(error => {
+                  res.send({ error, success: false, message: "DB error: file data save error" });
+                })
+            })
+        }
+      })
+    }
   }
   catch (error) {
     res.send({ error, message: "you just got an error in file upload" });
@@ -708,28 +787,35 @@ module.exports.audioVideoUpload = async (req, res) => {
 
 // for attachment
 
-module.exports.attachment = (req, res) => {
+module.exports.attachment = async (req, res) => {
   try {
-    const storage = multer.diskStorage({
-      destination: (req, file, cb) => {
-        if(file.mimetype == 'application/pdf' || file.mimetype == 'image/jpeg' || 
-          file.mimetype == 'image/png'|| file.mimetype == 'image/jpg' ||  file.mimetype == 'application/msword' || 
-          file.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
-          cb(null,'./uploads/user/attachment');
-        }
-      },
-  
-      filename: (req, file, cb) => {
+    let { userId } = jwt.decode(req.params.token);
+    let userDetails = await User.findOne({ _id: userId });
+    // console.log("userDetails: ", userDetails);
+    if (!userDetails && userDetails.status == 'inactive') {
+      return res.send({ success: false, message: "please purchase any plan" });
+    }
+    else {
+      const storage = multer.diskStorage({
+        destination: (req, file, cb) => {
+          if (file.mimetype == 'application/pdf' || file.mimetype == 'image/jpeg' ||
+            file.mimetype == 'image/png' || file.mimetype == 'image/jpg' || file.mimetype == 'application/msword' ||
+            file.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+            cb(null, './uploads/user/attachment');
+          }
+        },
+
+        filename: (req, file, cb) => {
           let originalname = file.originalname;
           let extension = originalname.split(".");
           filename = Date.now() + "." + extension[extension.length - 1];
           cb(null, filename);
-      },
-  });
+        },
+      });
       const fileFilter = (req, file, cb) => {
-        if(file.mimetype == 'application/pdf' || file.mimetype == 'image/jpeg' || 
-        file.mimetype == 'image/png'|| file.mimetype == 'image/jpg' ||  file.mimetype == 'application/msword' || 
-        file.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
+        if (file.mimetype == 'application/pdf' || file.mimetype == 'image/jpeg' ||
+          file.mimetype == 'image/png' || file.mimetype == 'image/jpg' || file.mimetype == 'application/msword' ||
+          file.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
           cb(null, true);
         }
         else {
@@ -737,51 +823,54 @@ module.exports.attachment = (req, res) => {
           cb(new Error('only pdf/doc/images are allowed'));
         }
       }
-    const upload = multer({ storage: storage, fileFilter: fileFilter }).single('file');
-    upload(req, res, async (error) => {
-      if (error) {
-        res.send({ error, success: false, message: "only pdf or txt files are allowed" });
-      }
-      else {
-        let { userId } = jwt.decode(req.params.token);
-        // let userId = req.params.token;
-        Chat.findOne({joinId : req.body.joinId})
-          .then(thread => {
-            if (!thread) {
-              res.send({ data: {}, success: false, message: "No thread found" });
-            }
-            else {
-              console.log("thread: ", thread);
-              let chatData = new Chat({
-                user_id: thread.userId,
-                username: thread.username,
-                user_image: thread.user_image ? thread.user_image : "" ,
-                counsellor_id: thread.counsellor_id,
-                counsellorname: thread.counsellorname,
-                joinId: req.body.joinId,
-                message: "attachment/" + req.file.filename,
-                fileupload: "attachment",
-                message_type: req.file.mimetype,
-                time: Date.now(),
-                id: thread.id,
-                messageAudio: req.body.messageAudio
-              });
-              chatData.save()
-                .then(doc => {
-                  console.log("doc: ", doc);
-                  res.send({ 
-                    data: doc, 
-                    success : true, 
-                    message: "you just uploaded a file" 
-                  });
-                })
-                .catch(error => {
-                  res.send({ error, success: false, message: "DB error: attachment data save error" });
-                })
-            }
-          })
-      }
-    })
+      const upload = multer({ storage: storage, fileFilter: fileFilter }).single('file');
+      upload(req, res, async (error) => {
+        if (error) {
+          res.send({ error, success: false, message: "only pdf or txt files are allowed" });
+        }
+        else {
+
+          // let userId = req.params.token;
+          Chat.findOne({ joinId: req.body.joinId })
+            .then(thread => {
+              if (!thread) {
+                res.send({ data: {}, success: false, message: "No thread found" });
+              }
+              else {
+                console.log("thread: ", thread);
+                let chatData = new Chat({
+                  user_id: thread.userId,
+                  username: thread.username,
+                  user_image: thread.user_image ? thread.user_image : "",
+                  counsellor_id: thread.counsellor_id,
+                  counsellorname: thread.counsellorname,
+                  joinId: req.body.joinId,
+                  message: "attachment/" + req.file.filename,
+                  fileupload: "attachment",
+                  type: req.file.mimetype === 'application/pdf' ? req.file.mimetype : 'image',
+                  time: Date.now(),
+                  id: thread.id,
+                  role: req.body.role,
+                  messageAudio: req.body.messageAudio,
+                  visible : false
+                });
+                chatData.save()
+                  .then(doc => {
+                    console.log("doc: ", doc);
+                    res.send({
+                      data: doc,
+                      success: true,
+                      message: "you just uploaded a file"
+                    });
+                  })
+                  .catch(error => {
+                    res.send({ error, success: false, message: "DB error: attachment data save error" });
+                  })
+              }
+            })
+        }
+      })
+    }
   }
   catch (error) {
     res.send({ error, success: false, message: " you just got error in attachment" });
@@ -792,49 +881,51 @@ module.exports.attachment = (req, res) => {
 
 // nick name or email update
 
-module.exports.updateNickName = (req, res) => {
+module.exports.updateNickName = async(req, res) => {
   try {
-    let {userId} = jwt.decode(req.params.token);
+    let { userId } = jwt.decode(req.params.token);
+    const user = await User.findOne({ _id: userId });
     // let userId = req.params.token;
-    if (!req.body.email && !req.body.nickName) {
-      res.send({ data: {}, success: false, message: "nothing update" });
+    if (!req.body.nickName) {
+      res.send({ data: {}, success: false, message: "nothing to update" });
     }
-    else{
-      if(req.body.email && req.body.nickName){
-        User.findByIdAndUpdate({_id : userId},
-          [{$set : {nickName : req.body.nickName, email : req.body.email}}],{new : true})
-          .then((result, error) =>{
-            if(error){
-              res.send({data : {}, error, success : false, message : "DB erro in nick name update"});
+    else {
+      let userData = {
+        username: user.username,
+        nickName: req.body.nickName
+      }
+      User.updateOne({ _id: userId }, userData)
+        .then(response => {
+          if (response.nModified == 1) {
+            const emailTemplate = fs.readFileSync(path.join(__dirname, '../views/profileUpdated.hbs'), "utf8");
+
+            // data to be send to template
+            let templateData = {
+              email: user.username,
+              otp: otp
             }
-            res.send({data : result, message: "nick name uodated", success: true }).status(201);
-          })
-          .catch(error => res.send({error, message: "DB error in nick name update", success: false }).status(201));
-      }
-      else {
-        if (!req.body.email) {
-          User.findByIdAndUpdate({_id : userId},
-            [{$set : {nickName : req.body.nickName}}],{new : true})
-            .then((result, error) =>{
-              if(error){
-                res.send({data : {}, error, success : false, message : "DB erro in nick name update"});
-              }
-              res.send({data : result, message: "nick name updated", success: true }).status(201);
-            })
-            .catch(error => res.send({error, message: "DB error in nick name update", success: false }).status(201));
-        }
-        if (!req.body.nickName) {
-          User.findByIdAndUpdate({_id : userId},
-            [{$set : {email : req.body.email}}],{new : true})
-            .then((result, error) =>{
-              if(error){
-                res.send({data : {}, error, success : false, message : "DB erro in nick name update"});
-              }
-              res.send({data : result, message: "nick name uodated", success: true }).status(201);
-            })
-            .catch(error => res.send({error, message: "DB error in nick name update", success: false }).status(201));
-        }
-      }
+            let mailData = {
+              subject: 'Profile Update',
+              to: user.email
+            }
+
+            // let response = mailSend.sendMail(mailData, templateData, emailTemplate);
+            console.log("response: ", mailSend.sendMail(mailData, templateData, emailTemplate));
+            if (mailSend.sendMail(mailData, templateData, emailTemplate)){
+              console.log("email sent");
+            }
+            else{
+              console.log("email not sent")
+            }
+            res.send({ response, success: true, message: "profile updated" });
+          }
+          else {
+            res.send({ response, success: false, message: "not updated" });
+          }
+        })
+        .catch(error => {
+          res.send({ error, success: false, message: "DB error" });
+        })
     }
   }
   catch (error) {
@@ -843,34 +934,106 @@ module.exports.updateNickName = (req, res) => {
 }
 
 
+module.exports.logout = (req, res)=>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    let newData = {
+      fcmToken : ""
+    }
+    User.updateOne({_id : userId}, newData)
+    .then(doc =>{
+      res.send({doc, success : true, message : "token reset"});
+    })
+    .catch(error =>{
+      res.send({error, success : false, message : "DB error"});
+    })
+  } 
+  catch (error) {
+    res.send({error, success : false, message : "Unknown error"});
+  }
+}
+
 
 
 
 // Switch Counselor
 // filter counselor list according to gender specified by user at time to registration
 
-module.exports.switchCounselor = (req, res) =>{
+module.exports.switchCounselor = async (req, res) => {
   try {
-    let {userId} = jwt.decode(req.params.token);
-    console.log("user id: ", userId);
-    User.findOne({_id : userId})
-    .then(user =>{
-      console.log("switch counselor wali api me user details: ", user);
-      let preferedfGender = req.body.preferedfGender;
-      Counselor.find({genderApplies : preferedfGender})
-      .then(docs =>{
-        res.send({docs, success : true, message : "counselor's list fetched"});
+    let { userId } = jwt.decode(req.params.token);
+    // let userId = req.params.token;
+    // let preferedfGender = req.body.preferedfGender ? req.body.preferedfGender : 'Male';
+    let thread = await Chat.findOne({ user_id: userId });
+    if(!thread || thread == null){
+      return res.send({success : false, message : "no thread found"});
+    }
+    else{
+      Counselor.find({_id: { $nin : [ thread.counsellor_id, "5fc9cb88db493e26f44e9622"] }})
+      .then(docs => {
+        // console.log("docs: ", docs);
+        let n = Math.floor(Math.random() * docs.length);
+        Chat.deleteMany({user_id : userId})
+        .then(doc =>{
+          console.log("old chat deleted : ", doc);
+        })
+        CounselorToUser.deleteMany({userId : userId})
+        .then(doc=>{
+          console.log("old sessions deleted : ", doc);
+        })
+        User.findById(userId)
+          .then(user => {
+            console.log(userId, docs[n]._id, docs[n].userName, user.username)
+            let threadData = new Chat({
+              user_id: userId,
+              counsellor_id: docs[n]._id,
+              counsellorname: docs[n].userName,
+              username: user.username,
+              joinId: userId + "-" + docs[n]._id,
+              message: docs[n].introMessage ? docs[n].introMessage : "",
+              type: "text",
+              visible: false,
+              role: 1
+            })
+            threadData.save()
+            .then(thread1 =>{
+              let userData = {
+                joinId : userId + "-" + docs[n]._id,
+                counselorId : docs[n]._id 
+              }
+              User.updateOne({_id : userId}, userData)
+              .then(newUserData =>{
+                const emailTemplate = fs.readFileSync(path.join(__dirname, '../views/counselorSwitch.hbs'), "utf8");
+                let templateData = {
+                  username: user.username,
+                  counselorName : docs[n].userName,
+                }
+                let mailData = {
+                  subject: 'Counsellor Switched',
+                  to: user.email
+                }
+                if (mailSend.sendMail(mailData, templateData, emailTemplate)) {
+                  console.log("email sent");
+                }
+                else {
+                  console.log("email not sent")
+                }
+                console.log("user model updated with join id and counselor id", newUserData);
+              })
+              res.send({thread1, success : true, message : "counselor switched success"});
+            })
+          })
+          .catch(error => {
+            res.send({error, success : false, message : "thread data save error"});
+          })
       })
-      .catch(error =>{
-        res.send({error, success : false, message : "DB error: counselor list fetch error"});
+      .catch(error => {
+        res.send({ error, success: false, message: "DB error: counselor list fetch error" });
       })
-    })
-    .catch(error =>{
-      res.send({error, success : false, message : "DB error: user details fetch error"});
-    })
-  } 
+    }
+  }
   catch (error) {
-    res.send({error, success : false, message : "Unknown error"});
+    res.send({ error, success: false, message: "Unknown error" });
   }
 }
 
@@ -901,8 +1064,9 @@ module.exports.counselorProfile = (req, res) =>{
 // get all questions
 module.exports.getQuestions = (req, res) => {
   try {
+    console.log("in here");
     Question.find({}, (error, doc) => {
-      if (error) {
+      if (error || !doc) {
         res.send({ error: error.message, success: false , message: 'DB error during fetch questions'});
       }
       if (doc.length > 0) {
@@ -977,41 +1141,48 @@ module.exports.getCurrentMembership = async (req, res) => {
     // let userId = req.params.token;
     // console.log(customerId);
     let user = await User.findById(userId);
-    console.log("user : ", user);
-    stripe.subscriptions.retrieve(
-      user.subscriptionId
-    )
-    .then(async subscription =>{
-      console.log("subscription: ", subscription);
-      console.log(subscription.latest_invoice);
-      stripe.invoices.retrieve(
-        subscription.latest_invoice
+    console.log("user : ", user.subscriptionId);
+    if(!user.subscriptionId){
+      res.send({creditCount : user.creditCount ,success : true, message : "you don't have any plan"});
+    }
+    else{
+      stripe.subscriptions.retrieve(
+        user.subscriptionId
       )
-      .then(async invoice =>{
-        console.log("invoice: ", invoice);
-        // let end_date = new Date(invoice.lines.data[0].period.end * 1000).toUTCString();
-        let end_date = new Date(subscription.current_period_end* 1000).toUTCString();
-        console.log("end dtae: ", end_date);
-        let product = await stripe.products.retrieve(subscription.items.data[0].plan.product);
-        console.log("product: ", product);
-        // console.log("description: ",invoice.lines.data[1].description)
-        let data = {
-          exp_date : end_date,
-          amount_paid : invoice.amount_paid,
-          plan_name: product.name,
-          interval : subscription.items.data[0].price.recurring.interval,
-          priceId : subscription.items.data[0].price.id,
-        //   description : invoice.lines.data[1].description ? invoice.lines.data[1].description : " " 
-        }
-        res.send({data,invoice, subscription});
+      .then(async subscription =>{
+        // console.log("subscription: ", subscription);
+        console.log(subscription.latest_invoice);
+        stripe.invoices.retrieve(
+          subscription.latest_invoice
+        )
+        .then(async invoice =>{
+          // console.log("invoice: ", invoice);
+          // let end_date = new Date(invoice.lines.data[0].period.end * 1000).toUTCString();
+          let end_date = new Date(subscription.current_period_end* 1000).toUTCString();
+          console.log("end dtae: ", end_date);
+          let product = await stripe.products.retrieve(subscription.items.data[0].plan.product);
+          // console.log("product: ", product);
+          // console.log("description: ",invoice.lines.data[1].description)
+          let data = {
+            exp_date : end_date,
+            amount_paid : subscription.plan.amount/100,
+            plan_name: product.name,
+            interval : subscription.items.data[0].price.recurring.interval,
+            priceId : subscription.items.data[0].price.id,
+            trial : subscription.plan.trial_period_days ? "Yes" : "No" ,
+            creditCount : user.creditCount
+          //   description : invoice.lines.data[1].description ? invoice.lines.data[1].description : " " 
+          }
+          res.send({data,invoice, subscription});
+        })
+        .catch(error =>{
+          res.send({error, success : false, message : "might be stripe error"});
+        })
       })
       .catch(error =>{
-        res.send({error, success : false, message : "might be stripe error"});
+        res.send({error, success : false, message : "stripe error"});
       })
-    })
-    .catch(error =>{
-      res.send({error, success : false, message : "stripe error"});
-    })
+    }
     // res.send({user});
   }
   catch (error) {
@@ -1080,16 +1251,16 @@ module.exports.updatePlan = (req, res) =>{
     // let userId = req.params.token;
     console.log("userid: ", userId);
     User.findById(userId)
-    .then(doc =>{
-      console.log("doc: ", doc.subscriptionId);
-      if (doc.subscriptionId !== null) {
+    .then(async user =>{
+      if(!user) return res.send({success : false, message : "no user found: DB error"});
+      console.log("doc: ", user.subscriptionId);
+      if (user.isCanceled == false ) {
         stripe.subscriptions.retrieve(
-          doc.subscriptionId
+          user.subscriptionId
         )
         .then(subscription =>{
-          console.log("stripe subscription: ", subscription);
           stripe.subscriptions.update(
-            doc.subscriptionId,
+            user.subscriptionId,
             {
               cancel_at_period_end: false,
               items: [{
@@ -1101,9 +1272,28 @@ module.exports.updatePlan = (req, res) =>{
           )
           .then(subscription => {
             User.findOneAndUpdate({ _id: userId },
-              { $set: { subscriptionId: subscription.id } })
+              { $set: { subscriptionId: subscription.id , 
+                planExpireDate : subscription.current_period_end,
+                planStartDate : subscription.current_period_start,
+                priceId : req.body.priceId,
+                isCanceled : false,
+                status : 'active'} })
               .then(doc => {
                 // console.log(`doc: ${doc}`);
+                const emailTemplate = fs.readFileSync(path.join(__dirname, '../views/counselorSwitch.hbs'), "utf8");
+                let templateData = {
+                  username: user.username,
+                }
+                let mailData = {
+                  subject: 'Counsellor Switched',
+                  to: user.email
+                }
+                if (mailSend.sendMail(mailData, templateData, emailTemplate)) {
+                  console.log("email sent");
+                }
+                else {
+                  console.log("email not sent")
+                }
                 res.send({ data: subscription, success: true, message: "subscription update success" });
               })
               .catch(error => {
@@ -1122,7 +1312,7 @@ module.exports.updatePlan = (req, res) =>{
       else {
         // console.log('in else:');
         stripe.subscriptions.create({
-          customer: doc.stripeCustomerId,
+          customer: user.stripeCustomerId,
           items: [
             { price : req.body.priceId },
           ],
@@ -1131,9 +1321,30 @@ module.exports.updatePlan = (req, res) =>{
         .then(subscription => {
           // console.log("subscription: ",subscription);
           User.findOneAndUpdate({ _id: userId },
-            { $set: { subscriptionId: subscription.id , status : 'active'} })
+            { $set: { subscriptionId: subscription.id , 
+              planExpireDate : subscription.current_period_end,
+              planStartDate : subscription.current_period_start,
+              priceId : req.body.priceId,
+              status : 'active'} })
             .then(doc => {
-              // console.log("doc: ", doc);
+              const emailTemplate = fs.readFileSync(path.join(__dirname, '../views/updateSubscription.hbs'), "utf8");
+                let templateData = {
+                  username: user.username,
+                  start_date : new Date(subscription.current_period_start*1000).toUTCString(),
+                  end_date : new Date(subscription.current_period_end*1000).toUTCString(),
+                  interval : subscription.items.data[0].plan.interval,
+                  amount : subscription.items.data[0].plan.amount/100,
+                }
+                let mailData = {
+                  subject: 'Subscription Updated',
+                  to: user.email
+                }
+                if (mailSend.sendMail(mailData, templateData, emailTemplate)) {
+                  console.log("email sent");
+                }
+                else {
+                  console.log("email not sent")
+                }
               res.send({ data: subscription, success: true, message: "subscription update success" });
             })
             .catch(error => {
@@ -1163,23 +1374,34 @@ module.exports.updatePlan = (req, res) =>{
 
 module.exports.cancelSubscription = (req, res) => {
   try {
-    User.findOne({ stripeCustomerId: req.body.stripeCustomerId })
+    let {userId} = jwt.decode(req.params.token);
+    let todayDate = new Date(Date.now()).toDateString();
+    let planEndDate;
+    User.findOne({ _id : userId })
       .then(result => {
-        if(result.subscriptionId == null){
-          res.send({data : {}, success : false, message : "you dont have any current plan to cancel"});
+        console.log("result: ", result);
+        if(result.subscriptionId == null || result.isCanceled == true){
+          return res.send({data : {}, 
+            success : false, 
+            message : "you dont have any current plan to cancel or you have already canceled your plan"});
         }
         else{
-          stripe.subscriptions.retrieve(
-            result.subscriptionId
-          )
-          .then(subscription =>{
-            console.log(new Date(subscription.current_period_start * 1000).toUTCString());
-            // res.send({data : subscription});
-          });
+          planEndDate = new Date(result.planExpireDate * 1000).toDateString();
+          // stripe.subscriptions.retrieve(
+          //   result.subscriptionId
+          // )
+          // .then(subscription =>{
+          //   console.log("subscription:  ", subscription);
+            
+            
+          //   console.log("date 1 : ", typeof planEndDate);
+          //   console.log("date2: ", typeof todayDate);
+          // });
           stripe.subscriptions.del(result.subscriptionId)
             .then(response => {
-              result.status = 'inactive';
-              result.subscriptionId = null;
+              result.status = result.status == 'trial' ?  'inactive' :
+                    (planEndDate == todayDate ? 'inactive' : 'active');
+              result.isCanceled = true;
               result.save()
                 .then(doc => {
                   res.send({ response, success: true, message: "subscription canceled" });
@@ -1191,7 +1413,7 @@ module.exports.cancelSubscription = (req, res) => {
   
             })
             .catch(error => {
-              console.log(error, "error");
+              // console.log(error, "error");
               res.send({
                 error: error,
                 success: false,
@@ -1235,7 +1457,7 @@ module.exports.updateCard = async (req, res) => {
             card.id
           )
           let cardData = {
-            number: req.body.cardNumber,
+            number: "************"+req.body.cardNumber.substring(12,16),
             expMonth: req.body.expMonth,
             expYear: req.body.expYear,
             cardId : card.id
@@ -1270,119 +1492,321 @@ module.exports.updateCard = async (req, res) => {
 
 module.exports.bookSlots = async (req, res) => {
   try {
-    // console.log(req.body);
+    console.log(req.body);
     let { userId } = jwt.decode(req.params.token);
-    let date = req.body.date;
-    let time = req.body.time;
-    let date1 = new Date(date.substring(0,4),date.substring(5,7),
-    date.substring(8,10),time.substring(0,2),time.substring(3,5));
-    let date2 = new Date(date.substring(0,4),date.substring(5,7),
-    date.substring(8,10),time.substring(6,8),time.substring(10,11));
-    time = `${date.getUTCHours()}:${date.getUTCMinutes()}-${date.getUTCHours()}:`
-    // console.log("date is: ",date);
-    date = `${date.getUTCFullYear()}-${date.getUTCMonth()+1}-${date.getUTCDate()}`;
-    console.log("date is: ",date, " timeis: ", time.substring(6,7),time.substring(8,9));
-    if (!req.body.stripeCustomerId) {
-      const customer = await stripe.customers.create({
-        email: req.body.email,
-        name: req.body.username,
-        description: 'one time payment',
-        address: req.body.address
-      });
-
-      const token = await stripe.tokens.create({
-        card: {
-          number: req.body.cardNumber,
-          exp_month: req.body.expMonth,
-          exp_year: req.body.expYear,
-          cvc: req.body.cvc,
-        },
-      });
-
-      const source = await stripe.customers.createSource(customer.id, {
-        source: token.id
-      })
-
-      await stripe.charges.create({
-        amount: 2000,
-        currency: 'usd',
-        source: source.id,
-        customer: customer.id,
-        description: 'One time payment ',
-      })
-        .then(async (charge) => {
-          const slotData = new CounselorToUser({
-            counselorId: req.body.counselorId,
-            userId: userId,
-            date: req.body.date,
-            slots: [{
-              time: req.body.time,
-              status: 3
-            }]
-          });
-          await slotData.save()
-            .then(slot => {
-              UpcomingSlots.updateOne({ counselorId: req.body.counselorId },
-                { $set: { 'availability.$[a].slot.$[s].status': 3 } },
-                { arrayFilters: [{ 'a.date': date }, { 's.time': req.body.time }] })
-                .then(result =>{
-                  console.log(result);
+    // let { userId } = jwt.decode(req.body.userId);
+    console.log(userId);
+    User.findById(userId)
+      .then(async user => {
+        console.log("user: ", user);
+        if (!user) {
+          return res.send({ success: false, message: "DB error: no user details found" });
+        }
+        // console.log("user details: ", user);
+        let { counselorId, time, date } = req.body;
+        if (!time || !date || !counselorId) {
+          return res.send({ success: false, message: "field missing: time/date/counselorId" });
+        }
+        // let userId = req.params.token;
+        console.log("time soit: ",  new Date(parseInt(time.split("-")[0])*1000).toUTCString());
+        console.log(req.body.date);
+        let date1 = new Date(req.body.date).toUTCString().substring(0, 16);
+        console.log("date is: ", date1);
+        if (user.creditCount > 0) {
+          // do code here if user has left an session credit score
+          // don't charge user for session booking
+          CounselorToUser.findOne({ counselorId: counselorId, userId: userId, date: date })
+            .then(async doc => {
+              if (doc != null) {
+                let index = doc.slots.findIndex(slot => slot.time == time);
+                console.log("index: ", index);
+                if(index == -1){
+                  let newSlot = {
+                    time: time,
+                    status: 3
+                  }
+                  doc.slots.push(newSlot);
+                  CounselorToUser.updateOne({ _id: doc._id }, doc)
+                    .then(slot => {
+                      console.log("slot.userId: ", userId);
+                      User.updateOne({ _id: userId }, { $inc: { creditCount: -1 } })
+                        .then(credit => {
+                          console.log("credit count update: ", credit);
+                        });
+                      UpcomingSlots.updateOne({ counselorId: counselorId },
+                        { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                        { arrayFilters: [{ 'a.date': date1 }, { 's.time': time }] })
+                        .then(result => {
+                          console.log(result);
+                        });
+                      res.send({ data: slot, success: false, message: "session book success" });
+                    })
+                    .catch(error => {
+                      res.send({ error, success: false, message: "DB error in session data save" });
+                    })
+                }
+                else{
+                  for(let i =0; i < doc.slots.length; i++){
+                    if(doc.slots[i].time == time){
+                      doc.slots[i].status = 3;
+                    }
+                  }
+                  console.log("doc.slots: ", doc.slots);
+                  CounselorToUser.updateOne({ _id: doc._id }, doc)
+                    .then(slot => {
+                      console.log("slot.userId: ", userId);
+                      User.updateOne({ _id: userId }, { $inc: { creditCount: -1 } })
+                        .then(credit => {
+                          console.log("credit count update: ", credit);
+                        });
+                      UpcomingSlots.updateOne({ counselorId: counselorId },
+                        { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                        { arrayFilters: [{ 'a.date': date1 }, { 's.time': time }] })
+                        .then(result => {
+                          console.log(result);
+                        });
+                      res.send({ data: slot, success: false, message: "session book success" });
+                    })
+                    .catch(error => {
+                      res.send({ error, success: false, message: "DB error in session data save" });
+                    })
+                }
+                
+              }
+              else {
+                const slotData = new CounselorToUser({
+                  counselorId: req.body.counselorId,
+                  userId: userId,
+                  date: date,
+                  slots: [{
+                    time: time,
+                    status: 3
+                  }]
                 });
-              res.send({ data: slot, success: false, message: "session book success" });
+                slotData.save()
+                  .then(slot => {
+                    User.updateOne({ _id: userId }, { $inc: { creditCount: -1 } })
+                      .then(credit => {
+                        console.log("credit count update: ", credit);
+                      });
+                    UpcomingSlots.updateOne({ counselorId: counselorId },
+                      { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                      { arrayFilters: [{ 'a.date': date1 }, { 's.time': time }] })
+                      .then(result => {
+                        console.log(result);
+                      });
+                    res.send({ data: slot, success: false, message: "session book success" });
+                  })
+                  .catch(error => {
+                    res.send({ error, success: false, message: "DB error in session data save" });
+                  })
+              }
             })
-            .catch(error => {
-              res.send({ error, success: false, message: "DB error in session data save" });
+        }
+        else {
+          // if user does not left with any session credit score 
+          // charge user for session booking in this case
+          if (!user.stripeCustomerId) {
+            if (!req.body.cardNumber || !req.body.expMonth || !req.body.expYear || !req.body.cvc) {
+              return res.send({ success: false, message: "card details missing: cardNumber/expMonth/expYear/cvc" });
+            }
+            const customer = await stripe.customers.create({
+              email: req.body.email,
+              // name: req.body.username,
+              description: 'one time payment',
+              // address: req.body.address
+            });
+
+            const token = await stripe.tokens.create({
+              card: {
+                number: req.body.cardNumber,
+                exp_month: req.body.expMonth,
+                exp_year: req.body.expYear,
+                cvc: req.body.cvc,
+              },
+            });
+
+            const source = await stripe.customers.createSource(customer.id, {
+              source: token.id
             })
-        })
-        .catch(error => {
-          res.send({ error, success: false, message: "payment error: something wrong with card" });
-        })
-    }
-    else {
-      User.findById(userId)
-        .then(user => {
-          // console.log("user")
-          stripe.charges.create({
-            amount: 2000,
-            currency: 'usd',
-            source: user.cardDetails.cardId,
-            customer: req.body.stripeCustomerId,
-            description: 'My First Test Charge (created for API docs)',
-          })
-            .then(charge => {
-              // console.log("charge: ", charge);
-              const slotData = new CounselorToUser({
-                counselorId: req.body.counselorId,
-                userId: userId,
-                date: req.body.date,
-                slots: [{
-                  time: req.body.time,
-                  status: 3
-                }]
-              });
-              // console.log(slotData);
-              slotData.save()
-                .then(document => {
-                  UpcomingSlots.updateOne({ counselorId: req.body.counselorId },
-                    { $set: { 'availability.$[a].slot.$[s].status': 3 } },
-                    { arrayFilters: [{ 'a.date': date }, { 's.time': req.body.time }] })
-                    .then(result =>{
-                      console.log("result: ", result);
-                    });
-                  res.send({ document, success: true, message: "slot book success" });
-                })
-                .catch(error => {
-                  res.send({ error, success: false, message: "DB error in slot data save" });
-                })
+
+            await stripe.charges.create({
+              amount: 2000,
+              currency: 'usd',
+              source: source.id,
+              customer: customer.id,
+              description: 'session booking charge',
             })
-            .catch(error => {
-              res.send({ error, successc: false, message: "card charge error" });
+              .then(async (charge) => {
+                console.log("charge in case user had not card add: ");
+                CounselorToUser.findOne({ counselorId: counselorId, userId: userId, date: date })
+                  .then(async doc => {
+                    if (doc != null) {
+                      let index = doc.slots.findIndex(slot => slot.time == time);
+                      console.log("index: ", index);
+                      if(index == -1){
+                        let newSlot = {
+                          time: time,
+                          status: 3
+                        }
+                        doc.slots.push(newSlot);
+                        CounselorToUser.updateOne({ _id: doc._id }, doc)
+                          .then(slot => {
+                            UpcomingSlots.updateOne({ counselorId: counselorId },
+                              { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                              { arrayFilters: [{ 'a.date': date1 }, { 's.time': time }] })
+                              .then(result => {
+                                console.log(result);
+                              });
+                            res.send({ data: slot, success: false, message: "session book success" });
+                          })
+                          .catch(error => {
+                            res.send({ error, success: false, message: "DB error in session data save" });
+                          })
+                      }
+                      else{
+                        for(let i=0; i< doc.slots.length; i++){
+                          if(doc.slots[i].time == time){
+                            doc.slots[i].status = 3;
+                          }
+                        }
+                        CounselorToUser.updateOne({ _id: doc._id }, doc)
+                          .then(slot => {
+                            UpcomingSlots.updateOne({ counselorId: counselorId },
+                              { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                              { arrayFilters: [{ 'a.date': date1 }, { 's.time': time }] })
+                              .then(result => {
+                                console.log(result);
+                              });
+                            res.send({ data: slot, success: false, message: "session book success" });
+                          })
+                          .catch(error => {
+                            res.send({ error, success: false, message: "DB error in session data save" });
+                          })
+                      }
+                    }
+                    else {
+                      const slotData = new CounselorToUser({
+                        counselorId: req.body.counselorId,
+                        userId: userId,
+                        date: date,
+                        slots: [{
+                          time: time,
+                          status: 3
+                        }]
+                      });
+                      slotData.save()
+                        .then(slot => {
+                          UpcomingSlots.updateOne({ counselorId: counselorId },
+                            { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                            { arrayFilters: [{ 'a.date': date1 }, { 's.time': time }] })
+                            .then(result => {
+                              console.log(result);
+                            });
+                          res.send({ data: slot, success: false, message: "session book success" });
+                        })
+                        .catch(error => {
+                          res.send({ error, success: false, message: "DB error in session data save" });
+                        })
+                    }
+                  })
+              })
+              .catch(error => {
+                res.send({ error, success: false, message: "payment error: something wrong with card" });
+              })
+          }
+          else {
+            stripe.charges.create({
+              amount: 2000,
+              currency: 'usd',
+              source: user.cardDetails.cardId,
+              customer: user.stripeCustomerId,
+              description: 'charge created for session booking',
             })
-        })
-        .catch(error => {
-          res.send({ error, success: false, message: "Stripe token create error" });
-        })
-    }
+              .then(charge => {
+                console.log("in case if user had card add: ");
+                CounselorToUser.findOne({ counselorId: counselorId, userId: userId, date: date })
+                  .then(async doc => {
+                    if (doc != null) {
+                      let index = doc.slots.findIndex(slot => slot.time == time);
+                      console.log("index: ", index);
+                      if(index == -1){
+                        let newSlot = {
+                          time: time,
+                          status: 3
+                        }
+                        doc.slots.push(newSlot);
+                        CounselorToUser.updateOne({ _id: doc._id }, doc)
+                          .then(async slot => {
+                            UpcomingSlots.updateOne({ counselorId: counselorId },
+                              { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                              { arrayFilters: [{ 'a.date': date1 }, { 's.time': time }] })
+                              .then(result => {
+                                console.log(result);
+                              });
+                            res.send({ data: slot, success: false, message: "session book success" });
+                          })
+                          .catch(error => {
+                            res.send({ error, success: false, message: "DB error in session data save" });
+                          })
+                      }
+                      else{
+                        console.log("doc.slots before for loop: ", doc.slots);
+                        for(let i=0; i < doc.slots.length; i++){
+                          if(doc.slots[i].time == time){
+                            doc.slots[i].status = 3;
+                          }
+                        }
+                        console.log("doc.slots: ", doc.slots);
+                        CounselorToUser.updateOne({ _id: doc._id }, doc)
+                          .then(async slot => {
+                            UpcomingSlots.updateOne({ counselorId: counselorId },
+                              { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                              { arrayFilters: [{ 'a.date': date1 }, { 's.time': time }] })
+                              .then(result => {
+                                console.log(result);
+                              });
+                            res.send({ data: slot, success: false, message: "session book success" });
+                          })
+                          .catch(error => {
+                            res.send({ error, success: false, message: "DB error in session data save" });
+                          })
+                      }
+                      
+                    }
+                    else {
+                      const slotData = new CounselorToUser({
+                        counselorId: counselorId,
+                        userId: userId,
+                        date: date,
+                        slots: [{
+                          time: time,
+                          status: 3
+                        }]
+                      });
+                      slotData.save()
+                        .then(slot => {
+                          UpcomingSlots.updateOne({ counselorId: counselorId },
+                            { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                            { arrayFilters: [{ 'a.date': date1 }, { 's.time': time }] })
+                            .then(result => { console.log(result); });
+                          res.send({ data: slot, success: false, message: "session book success" });
+                        })
+                        .catch(error => {
+                          res.send({ error, success: false, message: "DB error in session data save" });
+                        })
+                    }
+                  })
+              })
+              .catch(error => {
+                res.send({ error, successc: false, message: "card charge error" });
+              })
+          }
+        }
+      })
+      .catch(error => {
+        res.send({ error, success: false, message: "DB error : no user found" });
+      });
   }
   catch (error) {
     res.send({ error, success: false, message: " Something went wrong in book slot data save" });
@@ -1393,20 +1817,89 @@ module.exports.bookSlots = async (req, res) => {
 
 // get upcoming sessions of a user
 
-module.exports.getUpcomingSessions = (req, res) => {
+module.exports.getUpcomingSessions = async (req, res) => {
   try {
-    let {userId} = jwt.decode(req.params.token);
+    let { userId } = jwt.decode(req.params.token);
     // let userId = req.params.token;
     let date = new Date().toISOString().substring(0, 10);
-    // console.log("counsleor id: ", counselorId, " userId: ", userId, " date is : ", date);
-    CounselorToUser.find({ userId: userId, date: { $gte: date } })
+    CounselorToUser.aggregate([
+      { "$match": { "userId": userId } },
+      { "$match": { "date": { $gte: date } } },
+      { "$unwind": "$slots" },
+      { "$match": {"slots.status" : {"$in" : [0,3]}} }
+    ])
       .then(upcomingSessions => {
-        if (upcomingSessions.length == 0) {
-          res.send({upcomingSessions : {}, success : false, message : "no booking found"});
+        if (!upcomingSessions || upcomingSessions.length == 0) {
+          res.send({ upcomingSessions: {}, success: false, message: "no booking found" });
         }
         else {
-          // console.log("upcoming sessions: ", upcomingSessions);
-          res.send({ upcomingSessions, success: true, message: "you got your upcoming sessions for this user" });
+          let time = Math.floor(Date.now()/1000);
+          let sessionCount = upcomingSessions.filter(item =>{
+            return item.slots.status ==3 && parseInt(item.slots.time.split("-")[0]) > time;
+          })
+          console.log("session count: ", sessionCount.length);
+          upcomingSessions = upcomingSessions.sort((a,b) =>{
+            // console.log("a.parseint: ", new Date(a.date));
+            return new Date(a.date) - new Date(b.date);
+          });
+          upcomingSessions = upcomingSessions.map(item =>{
+            return {...item, startTime : item.slots.time.split("-")[0]}
+          })
+          res.send({ upcomingSessions,
+            count :sessionCount.length,
+            success:true,
+            message: "you got your upcoming sessions for this user" });
+        }
+      })
+      .catch(error => {
+        res.send({ error, success: false, message: "DB error in upcoming session find" });
+      })
+  }
+  catch (error) {
+    res.send({ error, success: false, message: "unknown error" });
+  }
+}
+
+
+
+
+module.exports.getLatestSession = async (req, res) => {
+  try {
+    let { userId } = jwt.decode(req.params.token);
+    // let userId = req.params.token;
+    console.log("userid: ", userId);
+    let date = new Date().toISOString().substring(0, 10);
+    CounselorToUser.aggregate([
+      { "$match": { "userId": userId } },
+      { "$match": { "date": { $gte: date } } },
+      { "$unwind": "$slots" },
+      { "$match": {"slots.status" : 3} }
+    ])
+      .then(upcomingSessions => {
+        if (!upcomingSessions || upcomingSessions.length == 0) {
+          res.send({ upcomingSessions: [], success: false, message: "no booking found" });
+        }
+        else {
+          console.log("date.now: ", Math.floor(Date.now()/1000));
+          // console.log("upcoing sessions: ", upcomingSessions);
+          let time = Math.floor(Date.now()/1000);
+          // let time = 1620190523;
+          console.log("time: ", time);
+          upcomingSessions = upcomingSessions.filter(item =>{
+            console.log(item.slots.time.split("-")[1])
+            return parseInt(item.slots.time.split("-")[1]) > time;
+          })
+          console.log("after filter: ", upcomingSessions);
+          upcomingSessions = upcomingSessions.sort((a,b) =>{
+            // console.log("type of: ", typeof parseInt(a.slots.time.split("-")[0]));
+            return a.slots.time.split("-")[0] - b.slots.time.split("-")[0]
+          })
+          upcomingSessions = upcomingSessions.map(item =>{
+            return {...item, startTime : item.slots.time.split("-")[0], endTime : item.slots.time.split("-")[1]}
+          })
+          res.send({ upcomingSessions,
+            success:true,
+            message: "you got your upcoming sessions for this user" });
         }
       })
       .catch(error => {
@@ -1456,31 +1949,46 @@ module.exports.getActiveSlots = async (req, res) =>{
 
 // get active slot for a specific date
 
-module.exports.getActiveSlotByDate = async (req, res) =>{
+module.exports.getActiveSlotByDate = async (req, res) => {
   try {
     console.log("date: ", req.body);
-    let {userId} = jwt.decode(req.params.token);
+    let { userId } = jwt.decode(req.params.token);
+    // let userId = req.params.token;
     console.log("thread id ", userId);
-    Chat.find({user_id : userId}).sort({_id : -1}).limit(1)
-    .then(async thread =>{
-      console.log("thread: ", thread[0].counsellor_id);
-      let date = new Date(req.body.date).toUTCString().substring(0,16);
-    // console.log("date is: ", date, " counselor id: ", thread[0].counsellor_id);
-    const slots = await UpcomingSlots.findOne(
-      {counselorId : thread[0].counsellor_id},
-      {availability : {$elemMatch : {date : date}}}
-      );
-      if(slots){
-        console.log("in ths block");
-        res.send({response : slots.availability, success : true, message : "slots fetched"});
-      }
-      else{
-        res.send({response : {}, success : false, message : "no slot found for this date/counselor"});
-      }
-    })
-  } 
+    Chat.find({ user_id: userId , counsellor_id : {$exists : true}}).sort({ _id: -1 }).limit(1)
+      .then(async thread => {
+        console.log("thread: ", thread);
+        let date = new Date(req.body.date).toUTCString().substring(0, 16);
+        console.log("date is: ", date, " counselor id: ", thread[0].counsellor_id);
+        const slots = await UpcomingSlots.aggregate([
+          { "$match": { "counselorId": thread[0].counsellor_id } },
+          { "$unwind": "$availability" },
+          { "$match": { "availability.status": "active" } },
+          { "$match": { "availability.date": date } },
+          { "$unwind": "$availability.slot" },
+          { "$match": { "availability.slot.status": 0 } },
+          {
+            "$group": {
+              "_id": "$_id",
+              "slot": { "$push": "$availability.slot" }
+            }
+          }
+        ]);
+        if (!slots || slots.length == 0) {
+          res.send({ response: {}, success: false, message: "no active slot found for this date/counsellor" });
+        }
+        else {
+          let length = slots.length;
+          console.log("slots: ", slots);
+          slots[length-1].date = date;
+          slots[length-1].status = "active";
+          slots[length-1].day = new Date(req.body.date).getDay();
+          res.send({ response: slots[length-1], success: true, message: "slots fetched" });
+        }
+      })
+  }
   catch (error) {
-    res.send({error, success : false, message : "unknown error: get slots for a date"});
+    res.send({ error, success: false, message: "unknown error: get slots for a date" });
   }
 }
 
@@ -1488,24 +1996,82 @@ module.exports.getActiveSlotByDate = async (req, res) =>{
 
 // Session cancel
 
-module.exports.cancelSession = (req, res) =>{
+module.exports.cancelSession = async (req, res) => {
   try {
-    // let counselorId = jwt.decode(req.params.token).userId;
+    if(!req.body.id || !req.body.time){
+      return res.send({success : false, message : "field/s missing"});
+    }
+    let { userId } = jwt.decode(req.params.token);
+    console.log("userid: ", userId);
     let time = req.body.time;
     let slotId = req.body.id;
-    CounselorToUser.updateOne({_id : slotId, "slots.time" : time}, 
-      {$set : {"slots.$.status" : 1}}, {new : true}
+    let slotData = await CounselorToUser.findOne({ _id: slotId });
+    console.log("slot data: ", slotData.slots);
+    let date1 = new Date(slotData.date).toUTCString().substring(0, 16);
+    // let timestamp1 = req.body.timestamp;
+    let timestamp1 = Date.now();
+    let timestamp2 = time.split("-")[0] * 1000;
+    let difference = Math.floor(Math.abs(timestamp1 - timestamp2) / 36e5);
+    console.log("difference: ", difference);
+    // res.send({timestamp1, timestamp2});
+    if (difference > 24) {
+      CounselorToUser.updateOne({ _id: slotId, "slots.time": time },
+        { $set: { "slots.$.status": 0 } }, { returnNewDocument: true }
       )
-      .then(doc =>{
-        console.log("doc: ", doc);
-        res.send({doc, success : true, message : "session canceled"});
-      })
-      .catch(error =>{
-        res.send({error, success : false, message : "DB error: session cancel from counselor side"});
-      })
-  } 
+        .then(doc => {
+          console.log("doc: ", doc);
+          if(doc.nModified >= 1){
+            User.updateOne({ _id: userId }, { $inc: { creditCount: 1 } })
+            .then(credit => {
+              // console.log("credit count update: ", credit);
+              // console.log("counselor id: ", slotData.counselorId, " date1: ", date1);
+              UpcomingSlots.updateOne({ counselorId: slotData.counselorId },
+                { $set: { 'availability.$[a].slot.$[s].status': 0 } },
+                { arrayFilters: [{ 'a.date': date1 }, { 's.time': time }] })
+                .then(result => {
+                  console.log("slot marked as active: ");
+                });
+              CounselorToUser.findOne({ _id: slotId })
+                .then(document => {
+                  res.send({ doc: document, success: true, message: "session canceled and credit increment by 1" })
+                })
+              // res.send({doc, success : true, message : "session canceled and credit increment by 1"});
+            });
+          }
+          else{
+            res.send({success : false, message : "nothing updated"});
+          }
+        })
+        .catch(error => {
+          res.send({ error, success: false, message: "DB error: session cancel from counselor side" });
+        })
+    }
+    else {
+      res.send({ success: false, message: "you can only cancel your bokking 24 hour before your session time." })
+    }
+  }
   catch (error) {
-    res.send({error, success : true, message : "unknown error"});
+    res.send({ error, success: true, message: "unknown error" });
+  }
+}
+
+
+// get user's session credit score
+
+module.exports.getCreditSessionScore = async (req, res) =>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    let user = await User.findById(userId, {creditCount : 1});  
+    if(!user){
+      res.send({success : false, message : "DB error"});
+    }
+    else{
+      console.log("user: ", user);
+      res.send({data : user.creditCount, success : true, message : "user session score count fetched"});
+    }
+  }
+   catch (error) {
+    res.send({error, success : false, message : "unknown error"});
   }
 }
 
@@ -1514,29 +2080,18 @@ const TestData = require('../models/testData');
 
 module.exports.getData = (req, res) =>{
   try {
-    let username = req.body.username;
-    let token = req.body.token;
-    console.log("token is: ", token, " and username: ", username);
-    const test = new TestData({
-      username : username,
-      data : token
-    })
-    test.save()
-    .then(doc =>{
-      res.send({doc});
+    User.find({isCanceled : true}, {_id : 1, status : 1, planExpireDate : 1})
+    .then(users =>{
+      res.send({users});
     })
     .catch(error =>{
-      res.send({error})
+      res.send({error});
     })
   } 
   catch (error) {
     res.send({error, success : false, message : "unknown error"});
   }
 }
-
-
-
-
 
 
 

@@ -62,7 +62,15 @@ const counselorSchema = new Schema({
 
     fcmToken : { type : String},
 
-    files : { type : Array}
+    files : { type : Array},
+
+    categories : {type : Array},
+
+    audios : { type : Array},
+
+    nickName : { type : String, default : ""},
+
+    timezone : { type : String}
 
 }, {timestamps : true});
 

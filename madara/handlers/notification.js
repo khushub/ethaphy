@@ -24,10 +24,10 @@ const User = require('../models/userModel');
 module.exports.generateAgoraToken = async (req, res) => {
     try {
         // require credentials for agora token genration
-        const appId = "6bd9467439e245a8b068b16bb281608a";
-        const appCertificate = "df1120feb9e147b0a0dd896f61566174";
+        const appId = "3d89854fdcd74534960e4b917dd50d23";
+        const appCertificate = "d08d158c964e434aa922ab804c3c40f5";
 
-        const expirationTimeInSeconds = 3600 // expiration time of token
+        const expirationTimeInSeconds = 30*60 // expiration time of token
 
         const role = RtcRole.PUBLISHER
         let userId = 0;
@@ -47,30 +47,35 @@ module.exports.generateAgoraToken = async (req, res) => {
 
         else {
             if (receiverRole === 'user') {
-                await User.findById(receiverId)
+                let user = await User.findById(receiverId);
+                if (!user || !user.fcmToken || user.fcmToken == "") {
+                    
+                    return res.send({ success: false, message: `${user.nickName} may not available` });
+                }
+                else {
+                    receiverName = user.nickName;
+                    fcmToken = user.fcmToken;
+                }
+                await Counselor.findById(senderId)
                     .then(doc => {
-                        fcmToken = doc.fcmToken;
-                        receiverName = doc.nickName
-                        console.log("user fcm token: ", fcmToken);
+                        console.log("doc: ", doc.userName);
+                        senderName = doc.userName ? doc.userName : doc.firstName;
                     })
                     .catch(error => {
-                        return res.send({ error, success: false, message: "DB fetch error for user device token" });
-                    });
-                    await Counselor.findById(senderId)
-                    .then(doc=>{
-                        senderName = doc.userName
-                    })
-                    .catch(error =>{
-                        res.send({error, success : false, message : "DB error in search of counselor name"});
+                        res.send({ error, success: false, message: "DB error in search of counselor name" });
                     })
             }
 
             if (receiverRole === 'counselor') {
                 await Counselor.findById(receiverId)
                     .then(doc => {
-                        // console.log("counselor fcm token: ", doc.fcmToken);
-                        fcmToken = doc.fcmToken;
-                        receiverName = doc.userName
+                        receiverName = doc.userName;
+                        if(!doc.fcmToken|| doc.fcmToken == ""){
+                            return res.send({success: false, message: `${doc.userName} may not available`});
+                        }
+                        else{
+                            fcmToken = doc.fcmToken;
+                        }
                     })
                     .catch(error => {
                         res.send({ error, success: false, message: "DB fetch error for counselor device token" });
@@ -91,6 +96,7 @@ module.exports.generateAgoraToken = async (req, res) => {
             }
 
             else {
+                // res.send({key, success : true, message : "message send successfully"});
                 const notification_options = {
                     priority: "high",
                     timeToLive: 60 * 60 * 24
@@ -109,7 +115,7 @@ module.exports.generateAgoraToken = async (req, res) => {
                         receiverName
                     }
                 }
-                console.log("messageing: ", message);
+                console.log("messageing: ", fcmToken);
                 admin.messaging().sendToDevice(fcmToken, message, notification_options)
                 .then(response =>{
                     console.log("successfully send message: ", response);
@@ -123,6 +129,7 @@ module.exports.generateAgoraToken = async (req, res) => {
                         senderName,
                         receiverName
                     }
+                    console.log("data: ", data);
                     res.send({data, success : true, message : "message send successfully"});
                 })
                 .catch(error =>{
@@ -133,7 +140,7 @@ module.exports.generateAgoraToken = async (req, res) => {
         }
     }
     catch (error) {
-        res.send({ error: error, success: false, message: "Something went wrong while rtc token generation" })
+        res.send({ error, success: false, message: "Something went wrong while rtc token generation" })
     }
 }
 
@@ -214,13 +221,15 @@ module.exports.sendAndroidNotification = (req, res) =>{
 module.exports.webCall = async (req, res, next) => {
     try {
         // require credentials for agora token genration
-        const appId = "6bd9467439e245a8b068b16bb281608a";
-        const appCertificate = "df1120feb9e147b0a0dd896f61566174";
+        // const appId = "6bd9467439e245a8b068b16bb281608a";
+        const appId = "3d89854fdcd74534960e4b917dd50d23";
+        // const appCertificate = "df1120feb9e147b0a0dd896f61566174";
+        const appCertificate = "d08d158c964e434aa922ab804c3c40f5";
 
         const expirationTimeInSeconds = 3600 // expiration time of token
 
         const role = RtcRole.PUBLISHER
-        let userId = 0;
+        let userId = 1;
         let channel = req.body.channel;
         let typeOfCall = req.body.typeOfCall;
         let currentTimeStamp = Math.floor(Date.now() / 1000);
@@ -228,11 +237,7 @@ module.exports.webCall = async (req, res, next) => {
         let privilegeExpiredTs = currentTimeStamp + expirationTimeInSeconds;
         console.log("expires time in sec: ", privilegeExpiredTs);
         let receiverId = req.body.receiverId;
-        let senderId = req.body.senderId;
         let receiverRole = req.body.receiverRole;
-        let fcmToken;
-        let senderName;
-        let receiverName;
         if (!channel || !receiverId || !receiverRole) {
             return res.send({ error: 'field is missing, either channel/receiverId/receiverRole' });
         }
@@ -246,6 +251,7 @@ module.exports.webCall = async (req, res, next) => {
             }
 
             else {
+                console.log(" in else");
                 Chat.findOne({joinId : channel, agoraToken : {$exists : true}})
                 .then(response =>{
 
@@ -256,7 +262,17 @@ module.exports.webCall = async (req, res, next) => {
                         });
                         chat.save()
                         .then(room =>{
-                            res.send({key, success : true, message : "message send successfully"});
+                            if(req.body.endTime && parseInt(req.body.endTime) > timestamp1){
+                                res.send({
+                                    key,
+                                    available: true,
+                                    success: true,
+                                    message: "token fetched"
+                                });
+                            }
+                            else{
+                                res.send({success : false, message : "session time expire"});
+                            }
                         })
                         .catch(error =>{
                             console.log(error);
@@ -264,7 +280,18 @@ module.exports.webCall = async (req, res, next) => {
                         })
                     }
                     else{
-                        res.send({key : response.agoraToken, success : true, message : "token fetched"});
+                        let timestamp1 = Math.floor(Date.now()/1000);
+                        if(req.body.endTime && parseInt(req.body.endTime) > timestamp1){
+                            res.send({
+                                key: response.agoraToken,
+                                available: true,
+                                success: true,
+                                message: "token fetched"
+                            });
+                        }
+                        else{
+                            res.send({success : false, message : "session time expire"});
+                        }
                     }
                 })
                 .catch(error =>{

@@ -17,15 +17,27 @@ router.put('/changePassword/:token', counselorHandler.changePassword);
 
 router.put('/editProfile/:token', counselorHandler.editProfile);
 
+router.put('/updateProfilePicture/:token', counselorHandler.updateProfilePicture);
+
+router.post('/addCategory/:token', counselorHandler.addCategory);
+
+router.get('/getCategory/:token', counselorHandler.getCategory);
+
+router.put('/deleteCategory/:token', counselorHandler.deleteCategory);
+
+router.get('/logout/:token', counselorHandler.logout);
+
 
 // scheduling related routes
 router.post('/filterByDate/:token', counselorHandler.filterByDate);
 
 router.post('/weeklyAvailability/:token', counselorHandler.addWeeklyAvailability);
 
-router.get('/getUpcomingSlots/:token', counselorHandler.getUpcomingSlots);
+router.post('/getUpcomingSlots/:token', counselorHandler.getUpcomingSlots);
 
-router.post('/getBookingsForCal/:token', counselorHandler.forCalendar);
+router.get('/getUpcomingSession/:token', counselorHandler.getSlotForAWeek);
+
+router.get('/getBookingsForCal/:token', counselorHandler.forCalendar);
 
 router.put('/disableSlotsByTime/:token', counselorHandler.disableSlotsByTime);
 
@@ -33,13 +45,15 @@ router.put('/disableSlotsByDate/:token', counselorHandler.disableSlotsByDate);
 
 router.post('/userUpcomingSessions/:token', counselorHandler.getUpcomingSessionsForaUser);
 
+router.post('/getLatestSession/:token', counselorHandler.getLatestSession);
+
 router.post('/bookSession/:token',counselorHandler.bookSession);
 
 router.put('/cancelSession/:token', counselorHandler.cancelSession);
 
 
 // dashboard
-router.get('/todayPlan/:token', counselorHandler.todayPlan)
+router.get('/todayPlan/:token', counselorHandler.todayPlan);
 
 router.get('/potential/:token', counselorHandler.potential);
 
@@ -62,7 +76,24 @@ router.put('/introMessage/:token', counselorHandler.introMessage);
 
 router.put('/upload/introVideo/:token', counselorHandler.uploadIntroVideo);
 
+router.post('/upload/audio/:token', counselorHandler.uploadAudios);
+
+router.get('/getAudios/:token', counselorHandler.getUploadedAudios);
+
+router.put('/deleteAudio/:token', counselorHandler.deleteAudio);
+
 router.post('/upload/document/:token', counselorHandler.uploadDocument);
+
+router.get('/getDocument/:token', counselorHandler.getDocument);
+
+router.put('/deleteDoc/:token',  counselorHandler.deleteDocument);
+
+
+
+// payment related routes
+router.get('/exchnageCount/:token', counselorHandler.exchangeCount);
+
+router.get('/payment/:token', counselorHandler.getPayment)
 
 module.exports = router;
 

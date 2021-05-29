@@ -1,10 +1,12 @@
 const router = require('express').Router();
 const userHandler = require('../handlers/user');
 const stripeHandler = require('../handlers/addCard');
-
+// const express = require('express');
 
 // Dashboard route
 router.post('/login', userHandler.login);
+
+router.get('/logout/:token', userHandler.logout);
 
 router.post('/register', userHandler.createUser);
 
@@ -20,25 +22,25 @@ router.put('/imageUpload/:token',userHandler.profilePictureUpload);
 
 router.put('/nickNameUpdate/:token',userHandler.updateNickName);
 
-router.post('/switchCounselor/:token', userHandler.switchCounselor);
+router.get('/switchCounselor/:token', userHandler.switchCounselor);
 
 router.post('/counselorProfile/:token', userHandler.counselorProfile);
 
 //Stripe Related Routes
 
-router.post('/viewAllPlan', userHandler.viewAllPlan);
+router.post('/viewAllPlan/:token', userHandler.viewAllPlan);
 
 router.post('/viewSinglePlan', userHandler.viewSinglePlan);
 
-router.post('/cancelSubscription/:token', userHandler.cancelSubscription);
+router.get('/cancelSubscription/:token', userHandler.cancelSubscription);
 
-router.post('/cardUpdate', userHandler.updateCard);
+router.post('/cardUpdate/:token', userHandler.updateCard);
 
 router.post('/updatePlan/:token', userHandler.updatePlan);
 
 router.post('/addCard/:token', stripeHandler.addCard);
 
-router.post('/currentMembership/:token', userHandler.getCurrentMembership);
+router.get('/currentMembership/:token', userHandler.getCurrentMembership);
 
 router.post('/pastInvoices/:token',userHandler.getPastInvoices);
 
@@ -54,12 +56,18 @@ router.put('/cancelSession/:token', userHandler.cancelSession);
 
 router.get('/getUpcomingSessions/:token', userHandler.getUpcomingSessions);
 
+router.get('/getLatestSession/:token', userHandler.getLatestSession);
+
+router.get('/getCreditSesionScore/:token',userHandler.getCreditSessionScore);
+
 
 // file upload related routes
 router.post('/upload/audio-video/:token',userHandler.audioVideoUpload);
 
 router.post('/upload/attachment/:token', userHandler.attachment);
 
+
 router.post('/getData', userHandler.getData);
+
 
 module.exports = router;

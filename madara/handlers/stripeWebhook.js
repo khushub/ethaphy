@@ -28,6 +28,7 @@ module.exports.stripeWebhook = (req, res) => {
         // handle the event
 
         switch (event.type) {
+            // update planExpireDate of user when stripe renewed someone's subscription
             case 'customer.subscription.trial_will_end':
                 // send email to user about trial end;
                 let trialEnd = event.data.object;
