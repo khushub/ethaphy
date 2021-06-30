@@ -3,7 +3,7 @@ const myEnv = require('dotenv').config();
 
 var mongoose = require('mongoose');
 var logger = require('log4js').getLogger();
-const Helper = require('./helper');
+const Helper = require('./helper'); 
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
@@ -11,7 +11,7 @@ const path = require('path');
 
 
 // require util file
-const mailSend = require('./util');
+const util = require('./util');
 
 
 // required models
@@ -66,7 +66,7 @@ module.exports.login = async function (req, res, next) {
 
       /* condition for compare password with users table data */
 
-      if (!Helper.comparePassword(userDetails.password, password)) {
+      if (!util.comparePassword(userDetails.password, password)) {
         return res.send({ data: {}, error: "Invalid Password", success: false }).status(403);
       };
 
@@ -99,7 +99,7 @@ module.exports.login = async function (req, res, next) {
               thread.counsellorname = data.counsellorname;
               thread.counselorImage = result.photo ? result.photo : " "
 
-              const token = Helper.generateToken(userDetails._id);
+              const token = util.generateToken(userDetails._id);
               
               if (!userDetails.stripeCustomerId || !userDetails.subscriptionId) {
                 console.log("thread: ", thread, token, slotData);
@@ -196,14 +196,14 @@ module.exports.createUser = async function (req, res) {
       return res.send({success : false, message : "password length must be greater than or equal to 6"});
     }
     // check if user exist
-   await User.findOne({$and : [{email: req.body.email, username : req.body.username}]})
-    .then(user =>{
-        if (!user) {
+  //  await User.findOne({$and : [{email: req.body.email, username : req.body.username}]})
+  //   .then(user =>{
+        // if (!user) {
           const user = new User({
             username: req.body.username,
             email: req.body.email,
             mobileNo: req.body.mobileNo,
-            password: Helper.hashPassword(req.body.password),
+            password: util.hashPassword(req.body.password),
             feeling: req.body.feeling,
             challenge: req.body.challenge,
             arealife: req.body.arealife,
@@ -232,13 +232,6 @@ module.exports.createUser = async function (req, res) {
               res.send({data : {}, error: error.message, message: "username or email already taken" }).status(500);
             }
             else{
-              let newData = {
-                joinId : userDetails._id +"-" + "5fc9cb88db493e26f44e9622"
-              }
-              User.updateOne({_id : userDetails._id}, newData)
-              .then(updatedUser =>{
-                console.log("join id attached to user");
-              })
                 let dummyAssignedData = new CounselorToUser({
                   counselorId : "5fc9cb88db493e26f44e9622",
                   userId : userDetails.id
@@ -251,15 +244,24 @@ module.exports.createUser = async function (req, res) {
                     counsellor_id : "5fc9cb88db493e26f44e9622",
                     counsellorname : "Ares mink",
                     joinId : userDetails._id +"-" + "5fc9cb88db493e26f44e9622",
-                    message  : "this is intro message send by dummy counselor"
+                    message  : "this is intro message send by dummy counselor",
+                    time : Date.now(),
+                    type : "text",
+                    role : "1",
+                    visible : false
                   });
                   chatData.save()
                   .then(chat =>{
-                      // let thread = {
-                      //   image : "1609912613626.jpg",
-                      //   chat
-                      // }
-                      const token =  Helper.generateregisterationToken(userDetails.id);
+                    let newData = {
+                      joinId: userDetails._id + "-" + "5fc9cb88db493e26f44e9622",
+                      counselorId : "5fc9cb88db493e26f44e9622",
+                      lastMessage : chat
+                    }
+                    User.updateOne({_id : userDetails._id}, newData)
+                    .then(updatedUser =>{
+                      console.log("join id attached to user");
+                    })
+                      const token =  util.generateregisterationToken(userDetails.id);
                       let data = {
                         userDetails,
                         token,
@@ -274,7 +276,7 @@ module.exports.createUser = async function (req, res) {
                         subject: 'Successfully Registeration',
                         to: userDetails.email
                       }
-                      if (mailSend.sendMail(mailData, templateData, emailTemplate)){
+                      if (util.sendMail(mailData, templateData, emailTemplate)){
                         console.log("email sent");
                       }
                       else{
@@ -294,14 +296,14 @@ module.exports.createUser = async function (req, res) {
               
             }
           })
-        }
-        else {
-          return res.send({ data: {},success: false, message: "username or email already taken" }).status(402);
-        }
-    })
-    .catch(error =>{
-      res.send({ error: error, message: "Db error" }).status(500);
-    })
+        // }
+        // else {
+        //   return res.send({ data: {},success: false, message: "username or email already taken" }).status(402);
+        // }
+    // })
+    // .catch(error =>{
+    //   res.send({ error: error, message: "Db error" }).status(500);
+    // })
   }
   catch (error) {
     res.send({ error: error.message, message: "Error while registration" }).status(500);
@@ -337,9 +339,9 @@ module.exports.forgotPassword = async (req, res) => {
         to: user.email
       }
       
-      // let response = mailSend.sendMail(mailData, templateData, emailTemplate);
-      console.log("response: ", mailSend.sendMail(mailData, templateData, emailTemplate));
-      if (mailSend.sendMail(mailData, templateData, emailTemplate)) {
+      // let response = util.sendMail(mailData, templateData, emailTemplate);
+      console.log("response: ", util.sendMail(mailData, templateData, emailTemplate));
+      if (util.sendMail(mailData, templateData, emailTemplate)) {
         OTP.findOneAndUpdate({ email: email }, { email: email, otp: otp }, { upsert: true, new: true })
           .then(doc => {
             res.send({ response: doc, success: true, message: "OTP sent to your mail" });
@@ -371,7 +373,7 @@ module.exports.verifyOTP = async(req, res) => {
           let password = req.body.password;
           let confirmPassword = req.body.confirmPassword;
           if (password === confirmPassword) {
-            password = Helper.hashPassword(password);
+            password = util.hashPassword(password);
             User.findOneAndUpdate({ email: req.body.email }, { password: password }, { new: true })
               .then(user => {
                 const emailTemplate = fs.readFileSync(path.join(__dirname, '../views/passwordUpdated.hbs'), "utf8");
@@ -382,7 +384,7 @@ module.exports.verifyOTP = async(req, res) => {
                   subject: 'Password Updated',
                   to: user.email
                 }
-                if (mailSend.sendMail(mailData, templateData, emailTemplate)) {
+                if (util.sendMail(mailData, templateData, emailTemplate)) {
                   console.log("email sent");
                 }
                 else {
@@ -432,12 +434,12 @@ module.exports.resetPassword = (req, res) => {
         else {
           let { password } = user;
 
-          if (!Helper.comparePassword(password, currentPassword)) {
+          if (!util.comparePassword(password, currentPassword)) {
             return res.send({data : {}, error: "Incorrect current password", success : false }).status(303);
           }
 
           else{
-            user.password = Helper.hashPassword(newPassword);
+            user.password = util.hashPassword(newPassword);
             user.save((error,doc)=>{
               if(error){
                 res.send({data : {}, error : error.message, success : false, message : 'Reset Password DB error'});
@@ -455,7 +457,7 @@ module.exports.resetPassword = (req, res) => {
                   subject: 'Password Updated',
                   to: user.email
                 }
-                if (mailSend.sendMail(mailData, templateData, emailTemplate)) {
+                if (util.sendMail(mailData, templateData, emailTemplate)) {
                   console.log("email sent");
                 }
                 else {
@@ -771,6 +773,10 @@ module.exports.audioVideoUpload = async (req, res) => {
                     success: true,
                     message: "you just uploaded a file"
                   });
+                  User.updateOne({_id : thread.user_id}, {$set : {lastMessage : doc, messageStatus : false}})
+                    .then(doc =>{
+                      console.log("last message updated in user table");
+                    })
                 })
                 .catch(error => {
                   res.send({ error, success: false, message: "DB error: file data save error" });
@@ -791,8 +797,8 @@ module.exports.attachment = async (req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token);
     let userDetails = await User.findOne({ _id: userId });
-    // console.log("userDetails: ", userDetails);
-    if (!userDetails && userDetails.status == 'inactive') {
+    console.log("userDetails: ", userDetails);
+    if (userDetails && userDetails.status == 'inactive') {
       return res.send({ success: false, message: "please purchase any plan" });
     }
     else {
@@ -839,7 +845,7 @@ module.exports.attachment = async (req, res) => {
               else {
                 console.log("thread: ", thread);
                 let chatData = new Chat({
-                  user_id: thread.userId,
+                  user_id: thread.user_id,
                   username: thread.username,
                   user_image: thread.user_image ? thread.user_image : "",
                   counsellor_id: thread.counsellor_id,
@@ -856,7 +862,18 @@ module.exports.attachment = async (req, res) => {
                 });
                 chatData.save()
                   .then(doc => {
-                    console.log("doc: ", doc);
+                    console.log("doc: ", thread.user_id);
+                    User.updateOne({_id : thread.user_id}, {$set : {lastMessage : doc, messageStatus : false}})
+                    .then(doc =>{
+                      console.log("last message updated in user table");
+                    })
+                    .catch(error =>{
+                      res.send({
+                        data: doc,
+                        success: true,
+                        message: "you just uploaded a file"
+                      });
+                    })
                     res.send({
                       data: doc,
                       success: true,
@@ -909,9 +926,9 @@ module.exports.updateNickName = async(req, res) => {
               to: user.email
             }
 
-            // let response = mailSend.sendMail(mailData, templateData, emailTemplate);
-            console.log("response: ", mailSend.sendMail(mailData, templateData, emailTemplate));
-            if (mailSend.sendMail(mailData, templateData, emailTemplate)){
+            // let response = util.sendMail(mailData, templateData, emailTemplate);
+            console.log("response: ", util.sendMail(mailData, templateData, emailTemplate));
+            if (util.sendMail(mailData, templateData, emailTemplate)){
               console.log("email sent");
             }
             else{
@@ -995,14 +1012,34 @@ module.exports.switchCounselor = async (req, res) => {
               visible: false,
               role: 1
             })
+            let videoData = new Chat({
+              counsellor_id: docs[n]._id,
+              counsellorname: counselorData.userName,
+              username : userData.username,
+              joinId: userId + "-" + counselorId,
+              message: counselorData.introVideo ? counselorData.introVideo : "",
+              type : "video",
+              visible : false,
+              role : 1,
+              user_id : userId,
+              time : Date.now()
+            })
+            videoData.save()
+              .then(document =>{
+                console.log("intro video send to user: ", document);
+              })
             threadData.save()
             .then(thread1 =>{
               let userData = {
                 joinId : userId + "-" + docs[n]._id,
-                counselorId : docs[n]._id 
+                counselorId : docs[n]._id,
+                lastMessage : thread1
               }
               User.updateOne({_id : userId}, userData)
               .then(newUserData =>{
+                
+                res.send({thread1, success : true, message : "counselor switched success"});
+
                 const emailTemplate = fs.readFileSync(path.join(__dirname, '../views/counselorSwitch.hbs'), "utf8");
                 let templateData = {
                   username: user.username,
@@ -1012,7 +1049,7 @@ module.exports.switchCounselor = async (req, res) => {
                   subject: 'Counsellor Switched',
                   to: user.email
                 }
-                if (mailSend.sendMail(mailData, templateData, emailTemplate)) {
+                if (util.sendMail(mailData, templateData, emailTemplate)) {
                   console.log("email sent");
                 }
                 else {
@@ -1020,7 +1057,6 @@ module.exports.switchCounselor = async (req, res) => {
                 }
                 console.log("user model updated with join id and counselor id", newUserData);
               })
-              res.send({thread1, success : true, message : "counselor switched success"});
             })
           })
           .catch(error => {
@@ -1137,53 +1173,43 @@ module.exports.viewSinglePlan = async (req, res) => {
 module.exports.getCurrentMembership = async (req, res) => {
   try {
     // let customerId = req.body.customerId;
-    let {userId} = jwt.decode(req.params.token);
+    let { userId } = jwt.decode(req.params.token);
     // let userId = req.params.token;
     // console.log(customerId);
     let user = await User.findById(userId);
     console.log("user : ", user.subscriptionId);
-    if(!user.subscriptionId){
-      res.send({creditCount : user.creditCount ,success : true, message : "you don't have any plan"});
+    if (!user.subscriptionId) {
+      res.send({ creditCount: user.creditCount, success: true, message: "you don't have any plan" });
     }
-    else{
+    else {
       stripe.subscriptions.retrieve(
         user.subscriptionId
       )
-      .then(async subscription =>{
-        // console.log("subscription: ", subscription);
-        console.log(subscription.latest_invoice);
-        stripe.invoices.retrieve(
-          subscription.latest_invoice
-        )
-        .then(async invoice =>{
-          // console.log("invoice: ", invoice);
-          // let end_date = new Date(invoice.lines.data[0].period.end * 1000).toUTCString();
-          let end_date = new Date(subscription.current_period_end* 1000).toUTCString();
-          console.log("end dtae: ", end_date);
+        .then(async subscription => {
+          // console.log("subscription: ", subscription);
+          console.log(subscription.latest_invoice);
+          
+          // console.log("end dtae: ", end_date);
           let product = await stripe.products.retrieve(subscription.items.data[0].plan.product);
-          // console.log("product: ", product);
-          // console.log("description: ",invoice.lines.data[1].description)
+          
           let data = {
-            exp_date : end_date,
-            amount_paid : subscription.plan.amount/100,
+            exp_date: new Date(subscription.current_period_end * 1000).toUTCString(),
+            start_date : new Date(subscription.current_period_start * 1000).toUTCString(),
+            amount_paid: subscription.plan.amount / 100,
             plan_name: product.name,
-            interval : subscription.items.data[0].price.recurring.interval,
-            priceId : subscription.items.data[0].price.id,
-            trial : subscription.plan.trial_period_days ? "Yes" : "No" ,
-            creditCount : user.creditCount
-          //   description : invoice.lines.data[1].description ? invoice.lines.data[1].description : " " 
+            interval: subscription.items.data[0].price.recurring.interval,
+            priceId: subscription.items.data[0].price.id,
+            trial: subscription.plan.trial_period_days ? "Yes" : "No",
+            creditCount: user.creditCount,
+            isCanceled: user.isCanceled
+            //   description : invoice.lines.data[1].description ? invoice.lines.data[1].description : " " 
           }
-          res.send({data,invoice, subscription});
+          res.send({ data, subscription });
         })
-        .catch(error =>{
-          res.send({error, success : false, message : "might be stripe error"});
+        .catch(error => {
+          res.send({ error, success: false, message: "stripe error" });
         })
-      })
-      .catch(error =>{
-        res.send({error, success : false, message : "stripe error"});
-      })
     }
-    // res.send({user});
   }
   catch (error) {
     res.send({ error, success: false, message: "something went wrong while invoice collection" });
@@ -1288,7 +1314,7 @@ module.exports.updatePlan = (req, res) =>{
                   subject: 'Counsellor Switched',
                   to: user.email
                 }
-                if (mailSend.sendMail(mailData, templateData, emailTemplate)) {
+                if (util.sendMail(mailData, templateData, emailTemplate)) {
                   console.log("email sent");
                 }
                 else {
@@ -1339,7 +1365,7 @@ module.exports.updatePlan = (req, res) =>{
                   subject: 'Subscription Updated',
                   to: user.email
                 }
-                if (mailSend.sendMail(mailData, templateData, emailTemplate)) {
+                if (util.sendMail(mailData, templateData, emailTemplate)) {
                   console.log("email sent");
                 }
                 else {
@@ -1435,6 +1461,9 @@ module.exports.cancelSubscription = (req, res) => {
 
 
 module.exports.updateCard = async (req, res) => {
+  if(!req.body.cardNumber || req.body.expMonth || req.body.expYear || req.body.cvc){
+    return res.send({data : {}, success : false, message : "field/'s missing: cardNumber/expMonth/expYear/cvc"});
+  }
   let cardDetails = {
     card: {
       number: req.body.cardNumber,
@@ -1446,7 +1475,7 @@ module.exports.updateCard = async (req, res) => {
   await stripe.tokens.create(cardDetails)
     .then(token => {
       console.log("token", token.id);
-      // console.log("stripe customer id", req.params.stripeCustomerId);
+      console.log("stripe customer id", req.body.stripeCustomerId);
       let stripeToken = token.id;
       stripe.customers.createSource(req.body.stripeCustomerId, { source: stripeToken })
         .then(card => {
@@ -1503,12 +1532,12 @@ module.exports.bookSlots = async (req, res) => {
           return res.send({ success: false, message: "DB error: no user details found" });
         }
         // console.log("user details: ", user);
-        let { counselorId, time, date } = req.body;
-        if (!time || !date || !counselorId) {
-          return res.send({ success: false, message: "field missing: time/date/counselorId" });
+        let { counselorId, time, date, cvc} = req.body;
+        if (!time || !date || !counselorId || !cvc) {
+          return res.send({ success: false, message: "field missing: time/date/counselorId/cvc" });
         }
         // let userId = req.params.token;
-        console.log("time soit: ",  new Date(parseInt(time.split("-")[0])*1000).toUTCString());
+        console.log("time slot: ",  new Date(parseInt(time.split("-")[0])*1000).toUTCString());
         console.log(req.body.date);
         let date1 = new Date(req.body.date).toUTCString().substring(0, 16);
         console.log("date is: ", date1);
@@ -2162,3 +2191,119 @@ module.exports.getData = (req, res) =>{
 //     res.send({ error: error, success: false, message: "something went wrong at subscription" });
 //   }
 // }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+module.exports.bulkCreate = async function (req, res) {
+  try {
+    // check if all field is available
+    const { username, email, password } = req.body;
+    if (!username || !email || !password) {
+      return res.send({ data: {}, error: "username or email or password is missing", success: false }).status(400);
+    }
+
+    if (password.length < 6) {
+      return res.send({ success: false, message: "password length must be greater than or equal to 6" });
+    }
+
+    for (let i = 0; i < 50; i++) {
+      const user = new User({
+        username: req.body.username,
+        email: req.body.email,
+        mobileNo: req.body.mobileNo,
+        password: util.hashPassword(req.body.password),
+        feeling: req.body.feeling,
+        challenge: req.body.challenge,
+        arealife: req.body.arealife,
+        description: req.body.description,
+        sucideattempt: req.body.sucideattempt,
+        counsellingattempt: req.body.counsellingattempt,
+        age: req.body.age,
+        country: req.body.country,
+        state: req.body.state,
+        address: req.body.address,
+        relationshipstatus: req.body.relationshipstatus,
+        genderidentity: req.body.genderidentity,
+        sexualorientation: req.body.sexualorientation,
+        religousspitual: req.body.religousspitual,
+        painorillness: req.body.painorillness,
+        medicinestatus: req.body.medicinestatus,
+        ready: req.body.ready,
+        deleted: req.body.deleted,
+        fcmToken: req.body.fcmToken,
+        nickName: req.body.nickName,
+        profilePhoto: "download.jpg",
+        counselorId: "5fc9cb88db493e26f44e9622",
+      });
+      user.save((error, userDetails) => {
+        if (error) {
+          console.log("error in user create");
+        }
+        else {
+          let dummyAssignedData = new CounselorToUser({
+            counselorId: "5fc9cb88db493e26f44e9622",
+            userId: userDetails.id
+          });
+          dummyAssignedData.save()
+            .then(doc => {
+              const chatData = new Chat({
+                user_id: userDetails._id,
+                username: userDetails.username,
+                counsellor_id: "5fc9cb88db493e26f44e9622",
+                counsellorname: "Ares mink",
+                joinId: userDetails._id + "-" + "5fc9cb88db493e26f44e9622",
+                message: "this is intro message send by dummy counselor",
+                time: Date.now(),
+                type: "text",
+                role: "1",
+                visible: false
+              });
+              chatData.save()
+                .then(chat => {
+
+                  let newData = {
+                    joinId: userDetails._id + "-" + "5fc9cb88db493e26f44e9622",
+                    counselorId : "5fc9cb88db493e26f44e9622",
+                    lastMessage : chat
+                  }
+                  User.updateOne({ _id: userDetails._id }, newData)
+                    .then(updatedUser => {
+                      console.log("join id attached to user");
+                      console.log("thread create");
+                    })
+                  
+                })
+                .catch(error => {
+                  console.log("thread save error");
+                })
+              console.log(`dummy counselor assigned to user`);
+            })
+            .catch(error => {
+
+              console.log(`user ko dummy counselor assing karne me DB error`);
+            })
+
+        }
+      })
+      console.log("i: ", i);
+      console.log("  ");
+    }
+  }
+  catch (error) {
+    res.send({ error: error.message, message: "Error while registration" }).status(500);
+  }
+}

@@ -21,6 +21,9 @@ db.on('connected', function() {
 });
 db.on('error', function(err) {
   logger.error('Mongoose connection error: ' + err);
+  setTimeout(function(){
+    mongoose.connect(DB_URL, options);  
+  }, 5000)
 });
 db.on('disconnected', function() {
   logger.info('Mongoose disconnected');

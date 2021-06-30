@@ -16,31 +16,8 @@ var logger = require('log4js').configure({  // Logger
 }).getLogger();
 
 const User = require('./madara/models/userModel');
+const updateMessageCount = require('./madara/handlers/counselor');
 
-// let request = require('request');
-
-// let headers = {
-// 	'webpushrKey': '3ea275cdaa68c9a8608cf2f6eaecc628',
-//     'webpushrAuthToken': '27462',
-//     'Content-Type': 'application/json'
-// };
-
-// let dataString = '{"title":"title","message":"notification message","target_url":"https://user.kushubmedia.com"}';
-
-// let options = {
-//     url: 'https://api.webpushr.com/v1/notification/send/all',
-//     method: 'POST',
-//     headers: headers,
-//     body: dataString
-// };
-
-// function callback(error, response, body) {
-//     if (!error && response.statusCode == 200) {
-//         console.log(body);
-//     }
-// }
-
-// request(options, callback);
 
 // required module
 const myEnv = require('dotenv').config();
@@ -109,6 +86,16 @@ app.use((req, res, next) => {
 	}
 });
 
+// app.use(bodyParser.json({
+//     // Because Stripe needs the raw body, we compute it but only when hitting the Stripe callback URL.
+//     verify: function(req,res,buf) {
+//         var url = req.originalUrl;
+//         if (url.startsWith('/webhook')) {
+//             req.rawBody = buf.toString()
+//         }
+//     }}));
+
+
 function checkUserStatus(){
 	let todayDate = new Date(Date.now()).toISOString().substring(0,10);
 	console.log("today date: ", todayDate);
@@ -133,7 +120,14 @@ function checkUserStatus(){
 	})
 }
 
-setInterval(checkUserStatus, 86400000)
+setInterval(checkUserStatus, 86400000);
+
+// setInterval(updateMessageCount.exchangeCount, 10000);
+
+const Cricket = require('./madara/models/cricketModel');
+
+
+// setInterval(updateCricData, 120000);
 
 logger.level = 'error';
 
@@ -266,3 +260,20 @@ app.listen(port, () => {
 
 
 
+
+
+
+
+
+
+
+
+
+function printPattern(){
+	let n = 12;
+    for(let i = 0; i< 7; i++){
+		
+    }
+}
+printPattern(); // 12, 11, 13, 12, 14, 13, 15, 14
+//  			   12, 11, 13, 12, 14, 13, 15  

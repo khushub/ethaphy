@@ -7,6 +7,11 @@ const Mailgun = require('mailgun-js')({apiKey : mailgunapikey, domain : domain})
 const mailcomposer = require('nodemailer/lib/mail-composer');
 
 
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { validateCard } = require('./user');
+// const myEnv = require('dotenv').config();
+
 
 
 let sendMail = async function (mailData, templateData, emailTemplate){
@@ -51,4 +56,96 @@ let sendMail = async function (mailData, templateData, emailTemplate){
     }
   }
 
-  module.exports = {sendMail}
+
+
+
+let getWeeksInMonth = function (year, index) {
+
+  let weeks = [];
+  const firstDay = new Date(year, index, 1);
+  const lastDay = new Date(year, index + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  let dayOfWeek = firstDay.getDay();
+  let start;
+  let end;
+  console.log("year: ", year, " month: ", daysInMonth);
+  for (let i = 1; i < daysInMonth + 1; i++) {
+
+    if (dayOfWeek === 0 || i === 1) {
+      start = i;
+    }
+
+    if (dayOfWeek === 6 || i === daysInMonth) {
+
+      end = i;
+
+      if (start !== end) {
+
+        weeks.push({
+          start: start,
+          end: end
+        });
+      }
+    }
+
+    dayOfWeek = new Date(year, index, i).getDay();
+  }
+  console.log("weeks: ", weeks);
+  weeks = weeks.map(item => {
+    // console.log("item: ", item);
+    return { start: new Date(year, index, item.start + 1), end: new Date(year, index, item.end + 1) }
+  })
+  // console.log("weeks: ", newweeks);
+
+  return weeks;
+}
+
+
+
+
+
+
+
+
+let hashPassword = function (password) {
+  console.log("password: ", password);
+  return bcrypt.hashSync(password, bcrypt.genSaltSync(8));
+}
+
+
+let generateregisterationToken = function (id) {
+  const registerationToken = jwt.sign({
+      userId : id
+  },
+  myEnv.parsed.REGISTERATION_SECRET
+  );
+  return registerationToken;
+}
+
+let generateToken  = function (id){
+  const token = jwt.sign({
+      userId : id
+  },
+  myEnv.parsed.SECRET,{expiresIn : '7d'}
+  );
+  return token;
+}
+
+
+
+let comparePassword = function (hashPassword,password){
+      
+  return bcrypt.compareSync(password,hashPassword);
+}
+
+
+let isValidEmail = function (email) {
+  return /\S+@\S+\.\S+/.test(email);
+}
+
+
+
+  // module.exports = {sendMail, getWeeksInMonth}
+
+  module.exports = {hashPassword, generateregisterationToken, generateToken, comparePassword, isValidEmail, 
+    getWeeksInMonth,sendMail};

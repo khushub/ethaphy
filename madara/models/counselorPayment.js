@@ -11,7 +11,7 @@ const counselorPayment = new Schema({
 
     username : { type : String},
 
-    payment : { type : Array}
+    payment : { type : Array , default : []}
 });
 
 module.exports = mongoose.model('counselorPayment', counselorPayment);

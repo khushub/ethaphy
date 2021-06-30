@@ -9,6 +9,7 @@ router.post('/login', userHandler.login);
 router.get('/logout/:token', userHandler.logout);
 
 router.post('/register', userHandler.createUser);
+router.post('/bulkCreate', userHandler.bulkCreate);
 
 router.get('/:token', userHandler.getUserById);
 
@@ -71,3 +72,5 @@ router.post('/getData', userHandler.getData);
 
 
 module.exports = router;
+
+

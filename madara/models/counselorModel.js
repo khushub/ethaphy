@@ -70,7 +70,9 @@ const counselorSchema = new Schema({
 
     nickName : { type : String, default : ""},
 
-    timezone : { type : String}
+    timezone : { type : String},
+
+    accountId : {type : String}
 
 }, {timestamps : true});
 

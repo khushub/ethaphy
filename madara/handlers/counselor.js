@@ -6,7 +6,8 @@ const nodemailer = require('nodemailer');
 const _ = require('lodash');
 const moment = require('moment');
 const mongodb = require('mongodb').ObjectID;
-
+const myEnv = require('dotenv').config();
+const util = require('./util');
 
 // required model
 const Counselor = require('../models/counselorModel');
@@ -18,6 +19,13 @@ const UpcomingSlots = require('../models/upcomingAvailability');
 const Chat = require('../models/chatModel');
 const CounselorPayment = require('../models/counselorPayment');
 const { times, join } = require('lodash');
+
+
+// required Stripe modules 
+
+const secretKey = myEnv.parsed.STRIPE_KEY;
+const Stripe = require('stripe');
+const stripe = Stripe(secretKey);
 
 
 const storage = multer.diskStorage({
@@ -262,6 +270,24 @@ module.exports.introMessage = async (req, res) =>{
   }
 }
 
+
+// get intro message (text and video) for a counselor
+module.exports.getIntroMessage = (req, res) =>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    Counselor.findOne({_id : userId}, {introMessage : 1, introVideo : 1})
+    .then(doc =>{
+      res.send({doc : doc, success : true, message : "introMessage fetched"});
+    })  
+    .catch(error =>{
+      res.send({error, doc : {}, success : false, message : "DB error in introMessage fetch"});
+    })
+  } 
+  catch (error) {
+    res.send({error, doc : {}, success : false, message : "Unknown error"});  
+  }
+}
+
 // upload document 
 
 module.exports.uploadDocument = (req, res) =>{
@@ -378,7 +404,7 @@ module.exports.uploadIntroVideo = async (req, res) =>{
             res.send({error, success : false, message : "only mp4 files are allowed"});
           }
           else{
-            counselor.introVideo = req.file.filename;
+            counselor.introVideo = "introMessage/" + req.file.filename;
             counselor.save()
             .then(doc =>{
               res.send({data : doc, success : true, message : "video uploaded"});
@@ -490,16 +516,79 @@ module.exports.deleteAudio = (req, res) =>{
 module.exports.getUploadedAudios = (req, res) =>{
   try {
     let {userId} = jwt.decode(req.params.token);
-    Counselor.findOne({_id : userId}, {audios : 1})
+    Counselor.findOne({_id : userId}, {audios : 1, categories : 1})
     .then(doc =>{
+      doc.audios = doc.audios.map(item =>{
+        return { id : item.id, url : item.url, name : item.name,
+          type : doc.categories.filter(a => a.id == item.type)[0].name}
+      })
       res.send({doc : doc.audios, success : true, message : "document fetched"});
     })  
     .catch(error =>{
-      res.send({error, success : false, message : "DB error in doc fetch"});
+      res.send({error, doc : {}, success : false, message : "DB error in doc fetch"});
     })
   } 
   catch (error) {
-    res.send({error, success : false, message : "Unknown error"});
+    res.send({error, doc : {}, success : false, message : "Unknown error"});
+  }
+}
+
+
+// get audios  by category
+module.exports.getAudByCateg = (req, res) =>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    let id = req.body.id;
+    console.log("id: ", id);
+    Counselor.findOne({_id : userId}, {audios : 1})
+    .then(doc =>{
+      doc.audios = doc.audios.filter(item => item.type == id);
+      res.send({doc : doc.audios, success : true, message : "document fetched"});
+    })  
+    .catch(error =>{
+      res.send({error, doc : [], success : false, message : "DB error in doc fetch"});
+    })
+  } 
+  catch (error) {
+    res.send({error, doc : [], success : false, message : "Unknown error"});
+  }
+}
+
+
+//send audios by category to user ( recorded audios)
+
+module.exports.sendAudios = async (req, res) =>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    let thread = await Chat.findOne({joinId : req.body.joinId}).sort({time : -1});
+    // res.send({thread});
+    if(thread){
+      let chatData = new Chat({
+        user_id : thread.user_id,
+        username : thread.username,
+        counsellor_id : thread.counsellor_id,
+        counsellorname : thread.counsellorname,
+        joinId : req.body.joinId,
+        message : req.body.url, //https://api.kushubmedia.com/user/audios/1623306400228.mp3
+        visible : false,
+        role : 1,
+        type : "audio",
+        time : Date.now()
+      });
+      chatData.save()
+      .then(data =>{
+        res.send({data, success : true, message : "file send success"});
+      })
+      .catch(error =>{
+        res.send({error, success : false, message : "file send error"});
+      })
+    } 
+    else{
+      res.send({data : [], success : false, message : "something went wrong. plz try again"});
+    }
+  } 
+  catch (error) {
+    res.send({error, doc : [], success : false, message : "Unknown error"});
   }
 }
 
@@ -703,7 +792,6 @@ module.exports.filterByDate = async (req, res) => {
 
     let startDate = new Date(req.body.startDate);
     let endDate = new Date(req.body.endDate);
-    console.log("emd date: ", endDate);
 
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -741,30 +829,30 @@ module.exports.filterByDate = async (req, res) => {
             let month = i.getUTCMonth();
             let currentDate = i.getUTCDate();
             
-            // console.log("availability[j]: ", availability[j], " ",j);
+            
             newSlots[j] = availability[j].slot.map(data =>{
-              // console.log("data: ", data);
+              
               let timeString = data.time.split('-');
               let formattedTime1 = timeString[0].split(':');
-              // console.log("time string: ", timeString, "formattedTime: ", formattedTime1);
+              
               let time1 = formattedTime1[0].length == 1 ? "0"+formattedTime1[0] : formattedTime1[0];
               let time2 = formattedTime1[1].length == 1 ? "0"+formattedTime1[1] : formattedTime1[1];
               let formattedTime2 = timeString[1].split(':');
-              // console.log("time string: ", timeString, "formattedTime: ", formattedTime1);
+              
               let time3 = formattedTime2[0].length == 1 ? "0"+formattedTime2[0] : formattedTime2[0];
               let time4 = formattedTime2[1].length == 1 ? "0"+formattedTime2[1] : formattedTime2[1];
-              // console.log(year, month, currentDate, time1, time2, time3, time4);
+              
               t1 = Date.UTC(`${year}`, `${month}`, `${currentDate}`,`${time1}`,`${time2}`, `00`)/1000;
               t2 = Date.UTC(`${year}`, `${month}`, `${currentDate}`,`${time3}`,`${time4}`, `00`)/1000;
-              // console.log(Date.UTC(`${year}`, `${month}`, `${currentDate}`,`${time1}`,`${time2}`, `00`)/1000);
+              
               // console.log(Date.UTC(`${year}`, `${month}`, `${currentDate}`,`${time3}`,`${time4}`, `00`)/1000);
-              console.log("t1 and t2 is: ", t1, t2);
+              
               
               return {status : data.status, time : t1+"-"+t2}  
             })
-            // res.send({newSlots})
+            
             if(days[i.getDay()] === availability[j].day){
-              // console.log("i.toDateString(),: ", i.toUTCString());
+              
               arrayOfUpcoming[k] = {
                 day : availability[j].day,
                 date : i.toDateString().substring(0,16),
@@ -775,11 +863,19 @@ module.exports.filterByDate = async (req, res) => {
             }
           }
         }
-        let date = new Date(req.body.startDate).toISOString().substring(0,10);
-        console.log("date: ", date);
+        let a = req.body.startDate.split("/");
+        let b = req.body.endDate.split("/");
+        // console.log("startDte: ", a[0]+"-"+a[1]+"-"+a[2]);
+        //2021-06-22
+        // let date1 = new Date(a[0]+"-"+a[1]+"-"+a[2]).toISOString().substring(0,10);
+        let date1 = new Date(req.body.startDate).toISOString().substring(0,10);
+        // let date2 = new Date(b[0]+"-"+b[1]+"-"+b[2]).toISOString().substring(0,10);
+        let date2 = new Date(req.body.endDate).toISOString().substring(0,10);
+        console.log("date: ", date1, " ", date2);
         CounselorToUser.aggregate([
           { "$match": {"counselorId" : userId} },
-          { "$match": { "date": { $gte: date } } },
+          { "$match": { "date": { $gte: date1 } } },
+          { "$match": { "date": { $lte: date2 } } },
           { "$unwind": "$slots" },
           { "$match": {"slots.status" : 3} }
         ])
@@ -787,20 +883,17 @@ module.exports.filterByDate = async (req, res) => {
           // console.log("doc: ", doc);
           arrayOfUpcoming = arrayOfUpcoming.map(item =>{
               item.slot = item.slot.map(data =>{
-                for(let i=0;i<doc.length; i++){
-                  if(doc[i].slots.time == data.time){
-                    return { status : 3, time : data.time}
-                  }
-                  else{
-                    return { status : 0, time : data.time}
-                  }
-                }
+                // console.log("data: ", data);
+                let index = doc.findIndex(item => {
+                  // console.log("item: ", item);
+                  return item.slots.time == data.time
+                });
+                console.log("index: ", index);
+                return { time : data.time, status : index == -1 ? data.status : 3}
               })
               return {day : item.day, date : item.date, status : item.status, slot : item.slot} ;
           })
-          res.send({
-            arrayOfUpcoming, 
-            doc});
+          res.send({doc : arrayOfUpcoming, data: doc, success : true, message : "data fetch"});
         })
         .catch(error =>{
           res.send({error, success : false, message : "db error for booking fetch"});
@@ -862,12 +955,12 @@ module.exports.getSlotForAWeek = async (req,res)=>{
   try {
     let { userId } = jwt.decode(req.params.token);
     let counselor = await Counselor.findById(userId, {timezone : 1});
-    console.log("counselor: ", counselor.timezone);
+    // console.log("counselor: ", counselor.timezone);
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat","Sun"];
     let workingHours = await Slot.findOne({counselorId: userId});
     // console.log("working hours: ", workingHours);
     if(!workingHours || workingHours.availability.length == 0){
-      console.log("in if");
+      // console.log("in if");
       let defaultData = []
       for(let i=0; i<days.length; i++){
           let data =  {
@@ -892,11 +985,11 @@ module.exports.getSlotForAWeek = async (req,res)=>{
       let timeStamp1 = new Date(Date.UTC(`${year}`, `${month}`, `${currentDate}`,
       `${item.slot[0].time.split("-")[0].split(":")[0]}`,
       `${item.slot[0].time.split("-")[0].split(":")[1]}`, `00`)).toLocaleTimeString();
-      console.log("time stamp1: ", timeStamp1.split(":"));
+      // console.log("time stamp1: ", timeStamp1.split(":"));
       let timeStamp2 = new Date(Date.UTC(`${year}`, `${month}`, `${currentDate}`,
       `${item.slot[length-1].time.split("-")[1].split(":")[0]}`,
       `${item.slot[length-1].time.split("-")[1].split(":")[1]}`, `00`)).toLocaleTimeString();
-
+      // console.log("time stamp1: ", timeStamp2.split(":"));
       let splited1 = timeStamp1.split(":");
       let splited2 = timeStamp2.split(":");
 
@@ -904,7 +997,7 @@ module.exports.getSlotForAWeek = async (req,res)=>{
 
       return { day : item.day, status : item.status,
       startTime : splited1[0]+":"+splited1[1]+" "+splited1[2].substring(3,5), 
-      endTime : splited2[0]+":"+splited1[1]+" "+splited1[2].substring(3,5)}
+      endTime : splited2[0]+":"+splited2[1]+" "+splited2[2].substring(3,5)}
     })
     
     for(let i=0; i<days.length; i++){
@@ -941,17 +1034,25 @@ module.exports.getSlotForAWeek = async (req,res)=>{
       res.send({
         data : data.slice(0,7), 
         workingHours : workingHours.availability,
+        startDate : data.slice(0,7)[0].date,
+        endDate : data.slice(0,7)[data.slice(0,7).length-1].date,
         timezone : counselor.timezone ? counselor.timezone : "", 
         success : true, 
         message : "slot fetched from today onwards"
       });
     })
     .catch(error =>{
-      res.send({error, success : false, message : "DB error: upcoming slot fetch"});
+      res.send({
+      	error, 
+      	workingHours : defaultData, 
+      	data : [],  
+      	success : true, // error me bhi success true saurabh sir ke kehne par
+      	message : "DB error: upcoming slot fetch"
+      });
     })
   } 
   catch (error) {
-   res.send({error, success : false, message : "error in upcoming slot fetch"});
+    res.send({error, workingHours : defaultData, data : [], success : true, message : "error in upcoming slot fetch"});
   }
 }
 
@@ -964,43 +1065,75 @@ module.exports.getSlotForAWeek = async (req,res)=>{
 module.exports.forCalendar = async (req, res) =>{
   try {
     let {userId} = jwt.decode(req.params.token);
-    console.log("userid: ", userId);
+    let ids = [];
+    let docs = [];
+    (await CounselorToUser.find({counselorId : userId}))
+    .forEach(item =>{
+      ids.push(item.userId);
+      docs.push(item);
+    })
+    if(docs.length <= 0 || ids.length <= 0){
+      return res.send({data : [], success : false, message : "No booking found"});
+    }
+    
+    let allUser = await userModel.find({}, {username : 1}).where('_id').in(ids);
+    
+    if(allUser.length <= 0) return res.send({data : [], success : false, message : "DB error"});
+    
     let data = [];
-    let date = new Date().toISOString().substring(0,10);
-    console.log("date: ", date);
-    await CounselorToUser.find({counselorId : userId})
-    .then(async doc =>{
-      console.log("doc: ", doc);
-      console.log(doc.length);
-      let i = 0;
-      let n=0;
-      while(i<doc.length){
-        console.log(i)
-        await userModel.findById(doc[i].userId)
-        .then(async user =>{
-          console.log("user: ", user.username, doc[i].slots.length);
-          for(let j =0; j<doc[i].slots.length; j++){
-            data[n] = {
-              _id : doc[i]._id,
-              name :  user.username,
-              date : doc[i].date,
-              slot : doc[i].slots[j]
-            }
-            n++;
-          }
-          
-        })
-        .catch(error =>{
-          res.send({error, success : false, message : "user details fetch error"});
-        })
-        i++;
+    let m = 0;
+    let k = 0;
+    console.log(docs.length)
+    while(m < docs.length){
+      // let index = allUser.findIndex(item => item._id == docs[m].userId);
+      // console.log("index: ", index);
+      for(let j =0; j<docs[m].slots.length; j++){
+        data[k] = {
+          _id : docs[m]._id,
+          // name :  allUser[index].username,
+          name :  allUser[allUser.findIndex(item => item._id == docs[m].userId)].username,
+          date : docs[m].date,
+          slot : docs[m].slots[j]
+        }
+        k++;
       }
-      console.log(data.length)
-      res.send({data , success : true, message : "All slot fetch for a user"});
-    })
-    .catch(error =>{
-      res.send({error, success : false, message : "DB error: for all slot fetch"});
-    })
+      m++;
+    }
+    res.send({data , success : true, message : "All slot fetch for a user"});
+    // let data = [];
+    // CounselorToUser.find({counselorId : userId})
+    // .then(async doc =>{
+
+    //   console.log(doc.length);
+    //   let i = 0;
+    //   let n=0;
+    //   while(i<doc.length){
+    //     console.log(i)
+    //     await userModel.findById(doc[i].userId)
+    //     .then(async user =>{
+    //       console.log("user: ", user.username, doc[i].slots.length);
+    //       for(let j =0; j<doc[i].slots.length; j++){
+    //         data[n] = {
+    //           _id : doc[i]._id,
+    //           name :  user.username,
+    //           date : doc[i].date,
+    //           slot : doc[i].slots[j]
+    //         }
+    //         n++;
+    //       }
+          
+    //     })
+    //     .catch(error =>{
+    //       res.send({error, success : false, message : "user details fetch error"});
+    //     })
+    //     i++;
+    //   }
+    //   // console.log(data.length)
+    //   res.send({data , success : true, message : "All slot fetch for a user"});
+    // })
+    // .catch(error =>{
+    //   res.send({error, success : false, message : "DB error: for all slot fetch"});
+    // })
   }
    catch (error) {
     res.send({error : error, success : false, message : "Invalid request : something is wrong with request"});
@@ -1129,67 +1262,97 @@ module.exports.disableSlotsByDate = async (req, res) => {
 
 // book a session for a user fron counselor side
 
-module.exports.bookSession = (req, res) =>{
+module.exports.bookSession = (req, res) => {
   try {
     let counselorId = jwt.decode(req.params.token).userId;
-    let date = new Date(req.body.date).toString().substring(0, 15);
-    let{userId , time} = req.body;
-    CounselorToUser.findOne({counselorId : counselorId, userId : userId, date : req.body.date})
-    .then(doc =>{
-      if(doc != null){
-        let newSlot = {
-          time : time,
-          status : 3
+    let date = new Date(req.body.date).toUTCString().substring(0, 16);
+    let { userId, time } = req.body;
+    console.log("date is: ", date);
+    CounselorToUser.findOne({ counselorId: counselorId, userId: userId, date: req.body.date })
+      .then(doc => {
+        if (doc != null) {
+          // res.send({doc});
+          let index = doc.slots.findIndex(slot => slot.time == time);
+          console.log("index: ", index);
+          if (index == -1) {
+            let newSlot = {
+              time: time,
+              status: 3
+            }
+            doc.slots.push(newSlot);
+            // res.send({ doc });
+            CounselorToUser.updateOne({ _id: doc._id }, doc)
+              .then(bookedSession => {
+                res.send({data : bookedSession, success : true, message : "booking confirmed"});
+                UpcomingSlots.updateOne({ counselorId: counselorId },
+                  { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                  { arrayFilters: [{ 'a.date': date }, { 's.time': time }] })
+                  .then(result => {
+                    console.log(result);
+                  });
+                  
+              })
+              .catch(error => {
+                res.send({error, data : {}, success : false, message : "booking data save error"});
+              })
+          }
+
+          else {
+            for (let i = 0; i < doc.slots.length; i++) {
+              if (doc.slots[i].time == time) {
+                doc.slots[i].status = 3;
+              }
+            }
+            CounselorToUser.updateOne({ _id: doc._id }, doc)
+              .then(bookedSession => {
+                res.send({data : bookedSession, success : true, message : "booking confirmed"});
+                UpcomingSlots.updateOne({ counselorId: counselorId },
+                  { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                  { arrayFilters: [{ 'a.date': date }, { 's.time': time }] })
+                  .then(result => {
+                    console.log(result);
+                  });
+                  
+              })
+              .catch(error => {
+                res.send({error, data : {}, success : false, message : "booking data save error"});
+              })
+          }
         }
-        doc.slots.push(newSlot);
-        // res.send({doc});
-        CounselorToUser.updateOne({_id : doc._id}, doc)
-        .then(bookedSession =>{
-          UpcomingSlots.updateOne({ counselorId: counselorId },
-            { $set: { 'availability.$[a].slot.$[s].status': 3 } },
-            { arrayFilters: [{ 'a.date': date }, { 's.time': time }] })
-            .then(result =>{
-              console.log(result);
-            });
-          res.send({data : bookedSession, success : true, message : "sessions updated"});
-        })
-        .catch(error =>{
-          res.send({error, success : false, message : "booking data save error"});
-        })
-      }
-      else{
-        // console.log("slot: in else ", slot)
-        let newSlot = {
-          time : time,
-          status : 3
+        else {
+          // console.log("slot: in else ", slot)
+          let newSlot = {
+            time: time,
+            status: 3
+          }
+          let sessionData = new CounselorToUser({
+            counselorId: counselorId,
+            userId: userId,
+            date: req.body.date,
+            slots: [newSlot]
+          });
+          sessionData.save()
+            .then(bookedSession => {
+              res.send({data : bookedSession, success : true, message : "booking confirmed"});
+              UpcomingSlots.updateOne({ counselorId: counselorId },
+                { $set: { 'availability.$[a].slot.$[s].status': 3 } },
+                { arrayFilters: [{ 'a.date': date }, { 's.time': time }] })
+                .then(result => {
+                  console.log(result);
+                });
+                
+            })
+            .catch(error => {
+              res.send({error, data : {}, success : false, message : "booking data save error"});
+            })
         }
-        let sessionData = new CounselorToUser({
-          counselorId : counselorId,
-          userId : userId,
-          date : req.body.date,
-          slots : [newSlot]
-        });
-        sessionData.save()
-        .then(bookedSession =>{
-          UpcomingSlots.updateOne({ counselorId: counselorId },
-            { $set: { 'availability.$[a].slot.$[s].status': 3 } },
-            { arrayFilters: [{ 'a.date': date }, { 's.time': time }] })
-            .then(result =>{
-              console.log(result);
-            });
-          res.send({data : bookedSession, success : true, message : "booking confirmed"});
-        })
-        .catch(error =>{
-          res.send({error, success : false, message : "booking data save error"});
-        })
-      }
-    })
-    .catch(error =>{
-      res.send({error, success : false, message : "session data save error"});
-    })
-  } 
+      })
+      .catch(error => {
+        res.send({error, data : {}, success : false, message : "session data save error"});
+      })
+  }
   catch (error) {
-    res.send({error, success : false, message : "unknown error"});
+    res.send({error, data:  {}, success : false, message : "unknown error"});
   }
 }
 
@@ -1225,54 +1388,36 @@ module.exports.potential = (req, res) =>{
 
 // counselor inbox
 
-module.exports.inbox = (req, res) => {
+module.exports.inbox = async (req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token);
+    let {page, limit} = req.body;
+
+    let skipIndex = (page-1)*limit
     // let userId = req.params.token;
-    Chat.find({ counsellor_id: userId , type : {$ne : "draft"}}).sort({ "time": -1 })
-      .then(async doc => {
-        if (doc.length == 0 || !doc) {
-          res.send({ data: {}, success: false, message: "no message found" });
-        }
-        else {
-          let array = _.uniqBy(doc, 'username');
-          let trial =0, active =0, inactive = 0;
-          // let key = 'user_id';
-          // const array = [...new Map(doc.map(item =>
-          //   [item[key], item])).values()];
-          // console.log("arrayUniqueByKey: ", array);
-          for (let i = 0; i < array.length; i++) {
-            if (array[i].username) {
-              console.log(array[i].username);
-              await userModel.findOne({ _id: array[i].user_id })
-                .then(async user => {
-                  console.log("user: ", user);
-                  if(user){
-                    let userThread = await Chat.find({
-                      counsellor_id:userId,
-                      username:array[i].username,
-                      visible : false,
-                      role : "0"
-                    })
-                    console.log("userthread:v", userThread.length);
-                    array[i] = array[i].toJSON();
-                    array[i].status = user.status;
-                    array[i].profilePhoto = user.profilePhoto;
-                    if(user.status == 'trial') trial = trial + 1;
-                    if(user.status == 'active') active = active + 1;
-                    if(user.status == 'inactive') inactive = inactive + 1;
-                    array[i].messageCount = userThread.length;
-                  }
-                })
-            }
-          }
-          let data = {all : trial+active+inactive, trial, active, inactive, array}
-          res.json(data).status(200);
-        }
-      })
-      .catch(error => {
-        res.status(500).send({ error, success: false, message: "DB error:  inbox data fetch" });
-      })
+
+    let userdata = await userModel.find({ counselorId: userId , status : {$exists : true}},
+      { lastMessage: 1, messageCount: 1, status: 1, profilePhoto: 1 })
+      .sort({"lastMessage.time" : -1})
+      .limit(limit)
+      .skip(skipIndex)
+      .exec();
+
+    let trial = 0, active = 0, inactive = 0;
+
+    console.log("userdata.length: ", userdata.length);
+
+    userdata.forEach(item =>{
+      if(item.status == 'active'){active = active+1; item.lastMessage.sortBy = 'a'}
+      if(item.status == 'inactive') {inactive = inactive+1; item.lastMessage.sortBy = 'u'}
+      if(item.status == 'trial') {trial = trial+1; item.lastMessage.sortBy = 't'}
+    })
+
+    userdata = _.sortBy(userdata, 'lastMessage.visible', 'lastMessage.sortBy');
+
+    let data = { all: trial + active + inactive, trial, active, inactive, array: userdata }
+
+    res.json(data).status(200);
   }
   catch (error) {
     res.status(501).send({ error, success: false, message: "unknown error" });
@@ -1377,32 +1522,40 @@ module.exports.sendDraft = (req, res) => {
 module.exports.action = async (req, res) => {
   try {
     let { userId } = jwt.decode(req.params.token);
-    if (req.body.status == 0) {
-      Chat.findOne({ username: req.body.id, role: "0" }).sort({ time: -1 })
-        .then(chat => {
-          Chat.updateOne({ _id: chat._id }, { $set: { visible: false } })
-            .then(doc => {
-              console.log("doc: ", doc);
-              res.send({ success: true, message: "thread status updated" });
-            })
-            .catch(error => {
-              res.send({ error, success: false, message: "DB error : thread status update" });
-            })
-        })
-        .catch(error => {
-          res.send({ error, success: false, message: "DB error: thread status update" });
-        })
-    }
-    else {
-      Chat.updateMany({ username: req.body.id, role: "0" }, { $set: { visible: true } },
-        { new: true })
-        .then(chat => {
-          res.send({ success: true, message: "message status updated" });
-        })
-        .catch(error => {
-          res.send({ error, success: false, message: "DB error: message status update" });
-        })
-    }
+    userModel.updateOne({username : req.body.id}, 
+      {$set : {"lastMessage.visible" : req.body.status == 0 ? false: true}})
+    .then(doc =>{
+      res.send({doc, success : true, message : "message status updated"});
+    })
+    .catch(error =>{
+      res.send({error, success : false,  message : "DB error in status update"});
+    })
+    // if (req.body.status == 0) {
+    //   Chat.findOne({ username: req.body.id, role: "0" }).sort({ time: -1 })
+    //     .then(chat => {
+    //       Chat.updateOne({ _id: chat._id }, { $set: { visible: false } })
+    //         .then(doc => {
+    //           console.log("doc: ", doc);
+    //           res.send({ success: true, message: "thread status updated" });
+    //         })
+    //         .catch(error => {
+    //           res.send({ error, success: false, message: "DB error : thread status update" });
+    //         })
+    //     })
+    //     .catch(error => {
+    //       res.send({ error, success: false, message: "DB error: thread status update" });
+    //     })
+    // }
+    // else {
+    //   Chat.updateMany({ username: req.body.id, role: "0" }, { $set: { visible: true } },
+    //     { new: true })
+    //     .then(chat => {
+    //       res.send({ success: true, message: "message status updated" });
+    //     })
+    //     .catch(error => {
+    //       res.send({ error, success: false, message: "DB error: message status update" });
+    //     })
+    // }
   }
   catch (error) {
     res.send({ error, success: false, message: "Unknown error" });
@@ -1475,7 +1628,7 @@ module.exports.userAssignment = async (req, res) => {
     if(counselorData.status == 'inactive'){
       return res.send({status: counselorData.status, success : false, message : "your application is pending to review"});
     }
-    // let counselorId = req.params.token;
+    
     let userId = req.body.userId
     Chat.deleteMany({user_id : userId})
     .then(deleted =>{
@@ -1497,22 +1650,51 @@ module.exports.userAssignment = async (req, res) => {
         type : "text",
         visible : false,
         role : 1,
-        user_id : userId
+        user_id : userId,
+        time : Date.now()
       }
     )
+    let videoData = new Chat({
+      counsellor_id: counselorId,
+      counsellorname: counselorData.userName,
+      username : userData.username,
+      joinId: userId + "-" + counselorId,
+      message: counselorData.introVideo ? counselorData.introVideo : "",
+      type : "video",
+      visible : false,
+      role : 1,
+      user_id : userId,
+      time : Date.now()
+    })
+    videoData.save()
+     .then(document =>{
+       console.log("intro video send to user: ", document);
+   })
     await threadData.save()
       .then(chat => {
         console.log("chat : ", chat);
         let joinId = userId + "-" + counselorId;
         let userData = {
           joinId : joinId,
-          counselorId : counselorId
+          counselorId : counselorId,
+          lastMessage : chat
         }
+        res.send({ thread: chat, joinId, success: true, message: "counselor assing to user" });
+
         userModel.updateOne({_id : userId}, userData)
         .then(userDetails =>{
           console.log("joinid and counselor id saved in user model: ", userDetails);
         })
-        res.send({ thread: chat, joinId, success: true, message: "counselor assing to user" });
+        let paymentData = new CounselorPayment({
+          counselorId : counselorId,
+          userId  : userId,
+          counsellorname : counselorData.userName,
+          username : userData.username
+        })
+        paymentData.save()
+        .then(doc =>{
+          console.log("data saved in counselor payment table");
+        })
       })
       .catch(error => {
         res.send({ error, success: false, message: "DB error : thread data save error" });
@@ -1968,91 +2150,632 @@ module.exports.logout = (req, res)=>{
 
 // get message exchange count and payment
 
-module.exports.exchangeCount = async (req, res) =>{
+module.exports.exchangeCount = async(req, res) => {
   try {
-    let counselorId  = jwt.decode(req.params.token).userId;
-    console.log("counselorId: ", counselorId);
-    let allMessages = await Chat.find({counsellor_id : counselorId, role : {$exists : true}}).sort({ "time": -1 });
+    let {userId} = jwt.decode(req.params.token);
     
-    let uniqByJoinId = _.uniqBy(allMessages, 'joinId');
-    let allJoinId = [];
-    let date = new Date();
-    // console.log("date is: ", date.getDay());
-    
-    for(let i = 0; i< uniqByJoinId.length; i++){
-      // console.log("uniqByJoinId[i].joinId: ", uniqByJoinId[i].joinId);
-      allJoinId[i] = uniqByJoinId[i].joinId;
-      // console.log("alljoinid: ", allJoinId[i]);
-    }
-    for(let n = 0; n < allJoinId.length; n++){
-      // console.log("allMessages.filter : ", allMessages.filter(item => item.joinId == allJoinId[n]));
-      let arr = allMessages.filter(item => item.joinId == allJoinId[n]).map(item => {return item.role});
-      let gc = 0;
-      console.log("arr: ",arr.toString());
-      loop1 :
-      for(let i = 0; i< arr.length; i++){
-        let first = arr[i+1] ? arr[i+1] : arr[i];
-        let c = 0;
-        loop2 :
-        for(let j=i+1; j <arr.length; j++){
-          if(first != arr[j]){
-            // console.log("first: ", first, " array[k]: ", arr[j]);
-            first = arr[j];
-            c++;
+    Counselor.find({_id : userId}, { _id: 1 })
+      .then(async doc => {
+        for (let n = 0; n < doc.length; n++) {
+          console.log("doc: n", doc[n]);
+          let prevData = await CounselorPayment.find({ counselorId: doc[n]._id});
+          // res.send({prevData});
+          if (prevData.length > 0) {
+            for (let i = 0; i < prevData.length; i++) {
+
+              if (prevData[i].payment.length == 0) {
+                console.log("in if: ");
+                // console.log("prev data: ", prevData[i]._id);
+                // console.log("time: ", prevData[i].payment[prevData[i].payment.length - 1].endDate.getDay());
+                // let date = prevData[i].payment[prevData[i].payment.length - 1].endDate;
+                let newMsgs = await Chat.find({
+                  counsellor_id: doc[n]._id,
+                  user_id: prevData[i].userId,
+                  time : {$exists : true}
+                  // time: { $gt: date }
+                }).sort({time : 1});
+                let arr = [];
+                // res.send({newMsgs});
+                for(let j = 0; j< newMsgs.length;){
+                  let curr = newMsgs[j].time;
+                  // console.log("curr: ", curr.toISOString());
+                  let firstday = new Date(curr.setDate(curr.getDate() - curr.getDay()+1));
+                  let lastday = new Date(curr.setDate(curr.getDate() - curr.getDay()+7));
+                  console.log("first day: ", firstday, " ", lastday);
+                  console.log(" ");
+
+                  arr = newMsgs.filter(item =>{
+                    return item.time >= firstday && item.time <= lastday; 
+                  })
+                  .map(data => { return data.role });
+
+                  console.log("arr.length: ", arr.length);
+                  j = j+arr.length;
+                  console.log("arr: ", arr);
+                  console.log(" ");
+                  let gc = 0;
+                  for (let k = 0; k < arr.length; k++) {
+                    let first = arr[k + 1] ? arr[k + 1] : arr[k];
+                    let c = 0;
+                    loop2:
+                    for (let l = k + 1; l < arr.length; l++) {
+                      if (first != arr[l]) {
+                        // console.log("first: ", first, " array[k]: ", arr[j]);
+                        first = arr[l];
+                        c++;
+                      }
+                      if (c == 2) {
+                        gc++;
+                        k = l;
+                        c = 0;
+                        continue loop2;
+                      }
+                    }
+                    // console.log("C: ", c);
+                  }
+                  console.log("gc: ", gc);
+                  let paymentdata = {
+                    startDate : firstday,
+                    endDate : lastday,
+                    amount: gc >= 1 ? 25 : 0,
+                    status: 8,
+                    exchangeCount: gc,
+                  }
+                  CounselorPayment.updateOne({_id : prevData[i]._id}, {$push : {payment : paymentdata}})
+                  .then(doc =>{
+                    console.log("updated doc: ", doc);
+                  })
+                  .catch(error =>{
+                    console.log("error: ", error);
+                  })
+                }
+
+              }
+              else{
+                let curr = new Date();
+
+                let firstday = new Date(curr.setDate(curr.getDate() - curr.getDay()+1));
+                let lastday = new Date(curr.setDate(curr.getDate() - curr.getDay()+7));
+                console.log("prevData: ", prevData[i].payment);
+                let arr = prevData[i].payment.filter(item =>{
+                  console.log("item.startDate.toISOString(): ", item.startDate.toISOString().substring(0,10));
+                  item.startDate.toISOString().substring(0,10) == firstday.toISOString().substring(0,10) &&
+                  item.endDate.toISOString().substring(0,10) == lastday.toISOString().substring(0,10)
+                })
+                console.log("arr: ", arr);
+              }
+            }
           }
-          if(c ==2){
-            gc++;
-            i = j; 
-            c=0;
-            continue loop2;
-          }
-        }
-        // console.log("C: ", c);
-      }
-      // console.log("after loops: ", uniqByJoinId[n])
-      let lastMessage = allMessages.filter(item => item.user_id == uniqByJoinId[n].user_id);
-      const paymentData = new CounselorPayment({
-        counselorId : counselorId,
-        counsellorname : lastMessage[0].counsellorname,
-        userId : lastMessage[0].user_id,
-        username : lastMessage[0].username,
-        payment : {
-          amount : gc >= 1 ? 25 : 0,
-          exchangeCount : gc,
-          status : 8,
-          startDate : lastMessage[lastMessage.length-1].createdAt.toISOString().substring(0,10),
-          endDate : lastMessage[0].createdAt.toISOString().substring(0,10)
+          res.send({success : true});
         }
       })
-      console.log("paymentData: ", paymentData);
-      paymentData.save()
-      .then(doc =>{
-        console.log("counselorData saved", doc);
+      .catch(error => {
+        console.log("db error: ", error);
       })
-      .catch(error =>{
-        console.log("error: " , error);
-      })
-    }
-    res.send({length: allMessages.length});
-  } 
+  }
   catch (error) {
-    res.send({error});
+    console.log(error);
   }
 }
 
 
-module.exports.getPayment = (req, res)=>{
+module.exports.getPayment = (req, res) => {
+  try {
+    let { userId } = jwt.decode(req.params.token);
+    let { month, year } = req.body;
+    let months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+    if (month && year) {
+
+      let index = months.findIndex(item => item == req.body.month.toUpperCase());
+
+      let weeks = util.getWeeksInMonth(req.body.year, index);
+
+      // console.log("weeks: ", weeks);
+
+      let myDate = new Date(`${req.body.year}, ${req.body.month}`);
+
+      let first_date = new Date(`${req.body.year}-${index + 1}-02`)
+      var last_date = new Date(myDate.getFullYear(), myDate.getMonth() + 1, 1);
+      console.log("first_date: ", first_date, "  last_date: ", last_date);
+      console.log(" ");
+
+      CounselorPayment.aggregate([
+        { "$match": { "counselorId": userId } },
+        { "$unwind": "$payment" },
+        { "$match": { "payment.startDate": { $gte: first_date } } },
+        { "$match": { "payment.endDate": { $lte: last_date } } },
+      ])
+        .then(async doc => {
+          // console.log("in aggregate: ", doc);
+          // res.send({doc});
+          let response = [];
+          console.log("format: ", new Date().toISOString())
+          for (let i = 0; i < weeks.length; i++) {
+            console.log("i: ", i);
+            let filterData = doc.filter(x => {
+
+              return (
+                x.payment.startDate.toISOString().substring(0, 10) >= weeks[i].start.toISOString().substring(0, 10) &&
+                x.payment.endDate.toISOString().substring(0, 10) <= weeks[i].end.toISOString().substring(0, 10)
+              )
+            })
+              
+              let insert = {
+                startDate: weeks[i].start,
+                endDate: weeks[i].end,
+                data: _.uniqBy(filterData, 'userId').map(item =>{
+                  return { _id : item._id, amount : item.payment.amount, status : item.payment.status,
+                    exchangeCount : item.payment.exchangeCount, counselorId : item.counselorId,
+                    userId : item.userId, counsellorname : item.counsellorname,
+                    username : item.username}
+                })
+              }
+              
+              response.push(insert);
+            
+            console.log("   ");
+          }
+          res.send({ response });
+          
+          
+          // console.log("response: ", response);
+        })
+    }
+
+    else {
+      // let dt1 = new Date("2021-06-21");
+      // let dt2 = new Date("2021-06-27");
+      // console.log("in else: ", new Date());
+      let curr = new Date();
+      // console.log("curr: ", curr.toISOString());
+      let dt1 = new Date(curr.setDate(curr.getDate() - curr.getDay() + 1));
+      let dt2 = new Date(curr.setDate(curr.getDate() - curr.getDay() + 7));
+      console.log(dt1, " ", dt2);
+      CounselorPayment.find({ counselorId: userId })
+        .then(doc => {
+          doc = doc.filter(item => { return (item.payment.length > 0) })
+          // console.log("doc.length: ", doc.length);
+          doc = doc.map(item => {
+            // console.log("item.payment: ", item.payment.length);
+            item.payment = item.payment.filter(data => {
+              // console.log("data: ", data);
+              return (data.startDate >= dt1 && data.endDate <= dt2)
+            })
+            console.log("item.payment: ", item.payment);
+
+            let pay, exchngCount;
+
+            if (item.payment.length == 0) pay = 0, exchngCount = 0;
+
+            else {
+              pay = item.payment.reduce((acc, curr) => acc + curr.amount, 0);
+              console.log("pay: ", pay);
+              exchngCount = item.payment.reduce((acc, curr) => acc + curr.exchangeCount, 0);
+            }
+            return {
+              counselorId: item.counselorId, userId: item.userId,
+              counsellorname: item.counsellorname, username: item.username, amount: pay, message: exchngCount,
+              status: 8
+            }
+          })
+          // let data = [{startDate : dt1, endDate : dt2,data : doc}]
+          res.send({ doc : {startDate : dt1, endDate : dt2, data : doc} });
+          // let amount = doc.reduce((acc, curr) => acc + curr.payment.amount, 0);
+          // res.send({
+          //   doc: { amount, from: new Date(fromDate), to: new Date(toDate) },
+          //   success: true, message: "data fetched"
+          // });
+
+          // console.log(amount);
+        })
+        .catch(error => {
+          res.send({ error, doc: {}, success: false, doc: {}, message: "DB error" });;
+        })
+    }
+
+  }
+  catch (error) {
+    res.send({ error, doc: {}, success: false, message: "Unknown error" });
+  }
+}
+
+
+
+
+
+module.exports.createStripeAccount = (req, res)=>{
   try {
     let {userId} = jwt.decode(req.params.token);
-    CounselorPayment.find({counselorId : userId})
-    .then(doc =>{
-      res.send({doc})
+    // let date = req.body.date
+    Counselor.findOne({_id : userId})
+    .then(async doc =>{
+      console.log(doc.email)
+      if(!doc.accountId || doc.accountId == ""){
+        console.log("in if");
+        const account =  await stripe.accounts.create({
+          type: 'express',
+          country: 'us',
+          email: doc.email,
+          business_url : "https://coun.kushubmedia.com/",
+          product_description : "very good products",
+          business_type : 'individual',
+          company : {
+            name : 'mycompany'
+          },
+          // individual : {email : doc.email}, 
+          capabilities: {
+            card_payments: {requested: true},
+            transfers: {requested: true}
+          }
+        });
+        
+        if (account.id) {
+          console.log("account: ", account);
+          // https://connect.stripe.com/express/oauth/authorize?redirect_uri=https://connect.stripe.com/hosted/oauth&client_id=
+          // // ca_JZ83dDtXIgoigphs78IZVFV3uhXF3FAt&state=onbrd_Jgbk7n56voOaYWdmg5ZKHwnXZJ&stripe_user[country]=US#/
+          // const person = await stripe.accounts.createPerson(
+          //   account.id,
+          //   {first_name: doc.firstName, last_name: doc.lastName, email : doc.email, phone : doc.mobileNumber,
+          //     relationship : {owner : true}, gender : doc.genderApplies.toLowerCase()}
+          // );
+          Counselor.updateOne({ _id: userId }, { accountId: account.id }, { upsert: true })
+            .then(doc => {
+              console.log("account  id added", doc);
+            })
+            .catch(error =>{
+               return (new Error('stripe error: ', error));
+            })
+          // const update_account = await stripe.accounts.update(
+          //   account.id,
+          //   {
+          //     // business_type : 'individual',
+          //     individual :{
+          //       email : doc.email,
+          //       first_name : doc.firstName,
+          //       gender : doc.genderApplies.toLowerCase(),
+          //       last_name : doc.lastName,
+          //       phone : doc.mobileNumber,
+          //     } ,
+          //     business_profile : {
+          //       name : "etherapyPro",
+          //       product_description : "this is very good product",
+          //       url : "https://coun.kushubmedia.com/"
+          //     }
+          //   }
+          // );
+
+
+          const accountLinks = await stripe.accountLinks.create({
+            account: account.id,
+            refresh_url: 'https://coun.kushubmedia.com/userdashboard/payment-success',
+            return_url: 'https://coun.kushubmedia.com/userdashboard/payment-success',
+            type: 'account_onboarding',
+          });
+          
+          if(accountLinks) res.send({data : accountLinks, person, success: true, message: "redirect to this link" });
+
+          else return (new Error('stripe error'));
+        }
+        else{
+          return (new Error('stripe error'));
+        }
+      }
+      else{
+        console.log("in else");
+        const account = await stripe.accounts.retrieve(
+          doc.accountId
+        );
+        console.log("account when already exists: ",account);
+        if(account.capabilities.card_payments == 'inactive' || account.capabilities.platform_payments == 'inactive'){
+          const deleted = await stripe.accounts.del(
+            doc.accountId
+          );
+
+          const account =  await stripe.accounts.create({
+            type: 'express',
+            country: 'us',
+            email: doc.email,
+            business_url : "https://coun.kushubmedia.com/",
+            product_description : "very good products",
+            capabilities: {
+              card_payments: {requested: true},
+              transfers: {requested: true}
+            }
+          });
+          console.log("account: ", account.id);
+          Counselor.updateOne({_id : userId}, {accountId : account.id}, {upsert : true})
+          .then(doc =>{
+            console.log("account  id added", doc);
+          })
+          .catch(error =>{
+            console.log("db error in accountId update: ", error);
+          })
+          // const update_account = await stripe.accounts.update(
+          //   account.id,
+          //   {
+          //     // business_type : 'individual',
+          //     individual :{
+          //       email : doc.email,
+          //       first_name : doc.firstName,
+          //       gender : doc.genderApplies.toLowerCase(),
+          //       last_name : doc.lastName,
+          //       phone : doc.mobileNumber,
+          //     } ,
+          //     business_profile : {
+          //       name : "etherapyPro",
+          //       product_description : "this is very good product",
+          //       url : "https://coun.kushubmedia.com/"
+          //     }
+          //   }
+          // );
+  
+          const accountLinks = await stripe.accountLinks.create({
+            account: account.id,
+            refresh_url: 'https://coun.kushubmedia.com/userdashboard/payment-success',
+            return_url: 'https://coun.kushubmedia.com/userdashboard/payment-success',
+            type: 'account_onboarding',
+          });
+
+          if(accountLinks) res.send({data : accountLinks, success : true, message : "redirect to this link"});
+
+          else res.send({data : {}, success : false, message : "unknown stripe error"});
+        }
+
+        else{
+          const loginLink = await stripe.accounts.createLoginLink(
+            doc.accountId
+          );
+          if(loginLink) res.send({data : loginLink, success : true, message : "redirect to dashboard"});
+          
+          else{
+            res.send({data : {}, success : false, message : "stripe error"});
+          }
+        }
+        
+      }
     })
     .catch(error =>{
-      res.send({error});
+      res.send({error, success : false, data : {}, message : "DB error"});;
     })
   } 
   catch (error) {
-    res.send({error, success : false, message : "Unknown error"});
+    res.send({error, data : {}, success : false, message : "Unknown error"});
+  }
+}
+
+
+
+
+
+// Get details of counselor's stripe account
+
+module.exports.getStripeDetails = async (req, res)=>{
+  try {
+    let {userId} = jwt.decode(req.params.token);
+    Counselor.findById(userId)
+    .then(async user =>{
+      const account = await stripe.accounts.retrieve(
+        user.accountId
+        // 'acct_1J2DshPPl0jP65Uc'
+      );
+      res.send({account});
+      // console.log(account.external_accounts.data[0]);
+      // const card = await stripe.accounts.retrieveExternalAccount(
+      //   user.accountId,
+      //   account.external_accounts.data[0].id
+      // );
+      let cardData = {};
+      if(card){
+        console.log("in if")
+        cardData = {
+          brand : card.brand,
+          expMonth : card.exp_month,
+          expYear : card.exp_year,
+          last4 : card.last4,
+          type : card.funding
+        }
+      }
+      if(account.capabilities.card_payments == 'inactive' || account.capabilities.platform_payments == 'inactive'){
+        res.send({data : account, card : cardData, success : false, message : "try again"});
+      }
+      else{
+        res.send({data : account, card : cardData, success : true, message : "success true"});       
+      }
+      // res.send({data : account.capabilities})
+    })
+    .catch(error =>{
+      res.send({error, data : {}, success : false, message : "DB error"});
+    })
+  }
+   catch (error) {
+    res.send({error, data : {}, success : false, message : "Unknown error"});
+  }
+}
+
+
+
+// withdraw money by counselor
+module.exports.withdraw = (req, res) => {
+  try {
+    let { userId } = jwt.decode(req.params.token);
+    let amount = req.body.amount;
+    Counselor.findById(userId)
+      .then(async user => {
+        // const topup =  await stripe.topups.create({
+        //   amount: 8000,
+        //   currency: 'usd',
+        //   description: 'Top-up for week of May 31',
+        //   statement_descriptor: 'Weekly top-up',
+        //   source : 'btok_us_verified'
+        // });
+        console.log("amount: ", amount, user.accountId);
+        const transfer = await stripe.transfers.create({
+          amount: amount,
+          currency: 'usd',
+          destination: user.accountId
+        });
+        if(transfer){
+          res.send({ data: transfer, success: true, message: "Transaction : Success" });
+        }
+        else{
+          res.send({ data: transfer, success: false, message: "Transaction : failed" });
+        }
+      })
+      .catch(error => {
+        res.send({ error, data: {}, success: false, message: "DB error" })
+      })
+  }
+  catch (error) {
+    res.send({ error, data: {}, success: false, message: "Transaction : Failure" });
+  }
+}
+
+
+module.exports.getPayoutList = (req, res) =>{
+  try {
+    let {userId}  = jwt.decode(req.params.token);
+    Counselor.findOne({_id : userId})
+    .then(async user =>{
+      const transfers = await stripe.transfers.list({
+        destination : 'acct_1J2X4oPA9FNFFEmo',
+        limit: 20,
+      });
+      if(transfers){
+        let data = transfers.data.map(item =>{
+          console.log("item: ", item);
+          return {date : new Date(item.created*1000).toDateString(), 
+            description : "Monthly payment", amount : item.amount,
+          type : "Online Transaction"}
+        })
+        console.log("data: ", data);
+        res.send({data : data, success : true, message : "data fetch success"});
+      }
+      else{
+        res.send({error, success : false, data : {}, message : "Stripe error"});
+      }
+    })
+    .catch(error =>{
+      res.send({error, success : false, data : {}, message : "DB error"});
+    }) 
+  } 
+  catch (error) {
+    res.send({error, success : false, data : {}, message : "Unknown error"});
+  }
+}
+
+
+
+
+module.exports.deleteacc = async (req, res) => {
+  try {
+    const accounts = await stripe.accounts.list({
+      limit: 100,
+    });
+    res.send({ data: accounts.data.length });
+    for (let i = 0; i < accounts.data.length; i++) {
+      const deleted = await stripe.accounts.del(
+        accounts.data[i].id
+      );
+      console.log("deleted: ", deleted);
+    }
+    Counselor.updateMany({accountId : {$exists : true}}, {$set : {accountId : ""} })
+    .then(doc =>{
+      console.log("doc: ", doc);
+    })
+  }
+  catch (error) {
+    res.send({ error, data: {}, success: false, message: "Transaction : Failure" });
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+module.exports.bulk_accept = async (req, res) => {
+  try {
+    let counselorId = jwt.decode(req.params.token).userId;
+    let counselorData = await Counselor.findById(counselorId);
+    if (counselorData.status == 'inactive') {
+      return res.send({ status: counselorData.status, success: false, message: "your application is pending to review" });
+    }
+    let users = await userModel.find({ counselorId: "5fc9cb88db493e26f44e9622" }, { _id: 1, username: 1 })
+    res.send({users});
+    // console.log(users.length);
+
+    for (let i = 0; i < users.length; i++) {
+      let userId = users[i]._id
+      Chat.deleteMany({ user_id: userId })
+        .then(deleted => {
+          console.log("old chat deleted");
+        })
+        .catch(error => {
+          console.log("db error in old chat deletion");
+        })
+
+      let threadData = new Chat(
+        {
+          counsellor_id: counselorId,
+          counsellorname: counselorData.userName,
+          username: users[i].username,
+          joinId: userId + "-" + counselorId,
+          message: counselorData.introMessage ? counselorData.introMessage : "",
+          type: "text",
+          visible: false,
+          role: 1,
+          user_id: userId,
+          time: Date.now()
+        }
+      )
+      let videoData = new Chat({
+        counsellor_id: counselorId,
+        counsellorname: counselorData.userName,
+        username: users[i].username,
+        joinId: userId + "-" + counselorId,
+        message: counselorData.introVideo ? counselorData.introVideo : "",
+        type: "video",
+        visible: false,
+        role: 1,
+        user_id: userId,
+        time: Date.now()
+      })
+      await threadData.save()
+        .then(chat => {
+          videoData.save()
+            .then(document => {
+              console.log("intro video send to user");
+            })
+          let joinId = userId + "-" + counselorId;
+          let userData = {
+            joinId: joinId,
+            counselorId: counselorId,
+            lastMessage: chat
+          }
+          console.log("counselor assing to user");
+
+          userModel.updateOne({ _id: userId }, userData)
+            .then(userDetails => {
+              console.log("joinid and counselor id saved in user model");
+            })
+        })
+        .catch(error => {
+          res.send({ error, success: false, message: "DB error : thread data save error" });
+        })
+        console.log("i: ", i);
+        console.log("  ");
+    }
+
+  }
+  catch (error) {
+    res.send({ error, success: false, message: "something goes wrong in counselor assignment" });
   }
 }

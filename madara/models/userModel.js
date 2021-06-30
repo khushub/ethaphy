@@ -3,9 +3,11 @@ const mongoose =  require('mongoose');
 const Schema = mongoose.Schema;
 
 const userSchema = new Schema({
-   username : { type : String, required : true, unique : true, index : true},     //username
+   // username : { type : String, required : true, unique : true, index : true},     //username
+   username : { type : String},     //username
 
-   email : { type : String, required : true, unique : true,  index : true },        //email
+   // email : { type : String, required : true, unique : true,  index : true },        //email
+   email : { type : String },        //email
 
    mobileNo : {type : String},
 
@@ -81,7 +83,13 @@ const userSchema = new Schema({
 
    isCanceled : { type : Boolean},
 
-   priceId : { type : String}
+   priceId : { type : String},
+
+   lastMessage : { type : Object},
+
+   messageStatus : { type : Boolean},
+
+   messageCount : { type : Number}
 
 } , {timestamps :true});
 

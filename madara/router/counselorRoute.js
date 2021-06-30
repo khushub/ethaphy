@@ -58,8 +58,9 @@ router.get('/todayPlan/:token', counselorHandler.todayPlan);
 router.get('/potential/:token', counselorHandler.potential);
 
 router.post('/acceptUser/:token', counselorHandler.userAssignment);
+router.post('/bulk_accept/:token', counselorHandler.bulk_accept);
 
-router.get('/inbox/:token', counselorHandler.inbox);
+router.post('/inbox/:token', counselorHandler.inbox);
 
 router.put('/action/:token', counselorHandler.action);
 
@@ -74,11 +75,17 @@ router.post('/sendDraft/:token', counselorHandler.sendDraft);
 
 router.put('/introMessage/:token', counselorHandler.introMessage);
 
+router.get('/getIntroMessage/:token', counselorHandler.getIntroMessage);
+
 router.put('/upload/introVideo/:token', counselorHandler.uploadIntroVideo);
 
 router.post('/upload/audio/:token', counselorHandler.uploadAudios);
 
 router.get('/getAudios/:token', counselorHandler.getUploadedAudios);
+
+router.post('/getAudiosByCategory/:token', counselorHandler.getAudByCateg);
+
+router.post('/sendAudio/:token', counselorHandler.sendAudios);
 
 router.put('/deleteAudio/:token', counselorHandler.deleteAudio);
 
@@ -86,14 +93,24 @@ router.post('/upload/document/:token', counselorHandler.uploadDocument);
 
 router.get('/getDocument/:token', counselorHandler.getDocument);
 
-router.put('/deleteDoc/:token',  counselorHandler.deleteDocument);
+router.put('/deleteDoc/:token',  counselorHandler.deleteDocument); 
 
 
 
 // payment related routes
-router.get('/exchnageCount/:token', counselorHandler.exchangeCount);
+router.post('/exchnageCount/:token', counselorHandler.exchangeCount);
 
-router.get('/payment/:token', counselorHandler.getPayment)
+router.post('/payment/:token', counselorHandler.getPayment);
+
+router.get('/stripeAccount/:token', counselorHandler.getStripeDetails);
+
+router.post('/connectAccount/:token', counselorHandler.createStripeAccount);
+
+router.post('/withdraw/:token', counselorHandler.withdraw);
+
+router.post('/delete/', counselorHandler.deleteacc);
+
+router.get('/payoutList/:token', counselorHandler.getPayoutList);
 
 module.exports = router;
 
