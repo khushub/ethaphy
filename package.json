@@ -30,7 +30,7 @@
     "moment": "^2.29.1",
     "mongoose": "^5.11.13",
     "multer": "^1.4.2",
-    "nodemailer": "^6.4.11",
+    "nodemailer": "^6.4.16",
     "nodemon": "^2.0.4",
     "phantom": "^6.3.0",
     "phantom-pool": "^1.2.2",
